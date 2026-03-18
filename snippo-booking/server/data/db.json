@@ -1,0 +1,180 @@
+{
+  "users": [
+    {
+      "id": "adm",
+      "name": "Admin",
+      "email": "admin@snippoentertainment.com",
+      "passwordHash": "$2b$10$8awcLm.YKXC7.CfRk6FFL.JuS1e6XUy1jCEAWNf1q2/F47l7JQCQu",
+      "role": "admin",
+      "status": "active",
+      "phone": ""
+    },
+    {
+      "id": "u1",
+      "name": "Alex Morgan",
+      "email": "alex@example.com",
+      "passwordHash": "$2b$10$s3SOfcK01108wWA/mReRweS/jmcbc.prlByc0Go5f/8QRU2bTPsQK",
+      "role": "user",
+      "status": "active",
+      "phone": ""
+    },
+    {
+      "id": "u2",
+      "name": "Jamie Liu",
+      "email": "jamie@example.com",
+      "passwordHash": "$2b$10$IKTU8gom1V9kb4Yx.sS41.tr5wpL5HaGzsphVGylTtoP.UhZ0xkZ6",
+      "role": "user",
+      "status": "active",
+      "phone": ""
+    },
+    {
+      "id": "u3",
+      "name": "Sam Torres",
+      "email": "sam@example.com",
+      "passwordHash": "$2b$10$IKTU8gom1V9kb4Yx.sS41.tr5wpL5HaGzsphVGylTtoP.UhZ0xkZ6",
+      "role": "user",
+      "status": "active",
+      "phone": ""
+    },
+    {
+      "id": "u4",
+      "name": "Casey Wu",
+      "email": "casey@example.com",
+      "passwordHash": "$2b$10$IKTU8gom1V9kb4Yx.sS41.tr5wpL5HaGzsphVGylTtoP.UhZ0xkZ6",
+      "role": "user",
+      "status": "active",
+      "phone": ""
+    },
+    {
+      "id": "stf",
+      "name": "Marcus Roy",
+      "email": "marcus@snippoentertainment.com",
+      "passwordHash": "$2b$10$Fo9XbzSglWRQjoJtHJ2rTudlZEBmbyvFg73TiSiiOR1TLkC5b3Zwi",
+      "role": "staff",
+      "status": "disabled",
+      "roleTitle": "Massage Therapist",
+      "staffId": null,
+      "phone": ""
+    }
+  ],
+  "services": [
+    {
+      "id": 7,
+      "name": "Studio Recording",
+      "desc": "Record, mix, and master your music with pro equipment and expert engineering to deliver a clear, powerful sound.",
+      "price": 120,
+      "dur": "120",
+      "img": "https://snippo.nextbusinesssolution.com/wp-content/uploads/2026/02/Gemini_Generated_Image_9wn7gp9wn7gp9wn7-1-2048x1143.jpg",
+      "active": true
+    }
+  ],
+  "staff": [
+    {
+      "id": 3,
+      "name": "Sofia Lane",
+      "role": "Sound Engenner",
+      "email": "sofia@snippoentertainment.com",
+      "i": "SL",
+      "c": "#0891b2",
+      "services": [
+        7
+      ],
+      "avail": [
+        false,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false
+      ],
+      "active": true
+    }
+  ],
+  "pendingStaff": [],
+  "bookings": [
+    {
+      "id": "BK-2401",
+      "userId": "u1",
+      "svc": "Luxury Facial",
+      "stf": "Aria Chen",
+      "dt": "Mar 3, 2026",
+      "t": "11:00 AM",
+      "p": "$120",
+      "s": "upcoming",
+      "paid": true,
+      "u": "Alex Morgan"
+    },
+    {
+      "id": "BK-2400",
+      "userId": "u2",
+      "svc": "Hot Stone Massage",
+      "stf": "Marcus Roy",
+      "dt": "Mar 3, 2026",
+      "t": "2:00 PM",
+      "p": "$180",
+      "s": "active",
+      "paid": true,
+      "u": "Jamie Liu"
+    },
+    {
+      "id": "BK-2399",
+      "userId": "u3",
+      "svc": "Nail Art Studio",
+      "stf": "James Park",
+      "dt": "Mar 4, 2026",
+      "t": "10:00 AM",
+      "p": "$65",
+      "s": "upcoming",
+      "paid": true,
+      "u": "Sam Torres"
+    },
+    {
+      "id": "BK-2398",
+      "userId": "u4",
+      "svc": "Hair Styling",
+      "stf": "Sofia Lane",
+      "dt": "Mar 5, 2026",
+      "t": "1:00 PM",
+      "p": "$85",
+      "s": "upcoming",
+      "paid": false,
+      "u": "Casey Wu"
+    },
+    {
+      "id": "BK-2388",
+      "userId": "u1",
+      "svc": "Hot Stone Massage",
+      "stf": "Marcus Roy",
+      "dt": "Feb 22, 2026",
+      "t": "2:00 PM",
+      "p": "$180",
+      "s": "completed",
+      "paid": true,
+      "u": "Alex Morgan"
+    },
+    {
+      "id": "BK-2371",
+      "userId": "u1",
+      "svc": "Hair Styling",
+      "stf": "Sofia Lane",
+      "dt": "Feb 10, 2026",
+      "t": "10:00 AM",
+      "p": "$85",
+      "s": "completed",
+      "paid": true,
+      "u": "Alex Morgan"
+    }
+  ],
+  "counters": {
+    "user": 5,
+    "service": 8,
+    "staff": 5,
+    "pending": 1,
+    "booking": 2411
+  },
+  "meta": {
+    "createdAt": "2026-03-06T17:08:30.890Z",
+    "updatedAt": "2026-03-06T18:09:20.196Z"
+  }
+}
