@@ -40,11 +40,21 @@ const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:5173")
   .map((v) => v.trim().replace(/\/$/, ""))
   .filter(Boolean);
 
+console.log("[CORS] Allowed Origins:", allowedOrigins);
+
 app.use(
   cors({
     origin(origin, cb) {
-      if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-      cb(new Error("Origin not allowed"));
+      if (!origin) return cb(null, true);
+      
+      const isAllowed = allowedOrigins.includes(origin) || allowedOrigins.includes("*");
+      
+      if (isAllowed) {
+        cb(null, true);
+      } else {
+        console.warn(`[CORS] Rejected Origin: ${origin} (Not in: ${allowedOrigins.join(", ")})`);
+        cb(new Error(`Origin ${origin} not allowed by CORS policy`));
+      }
     },
     credentials: true,
   })
