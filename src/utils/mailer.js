@@ -13,6 +13,7 @@ const EMAILJS_API_URL = 'https://api.emailjs.com/api/v1.0/email/send';
 export const sendEmailJS = async (templateId, templateParams, toEmail) => {
   const serviceId = process.env.EMAILJS_SERVICE_ID;
   const publicKey = process.env.EMAILJS_PUBLIC_KEY;
+  const privateKey = process.env.EMAILJS_PRIVATE_KEY;
 
   if (!serviceId || !publicKey) {
     console.error('[EmailJS Error] Missing Service ID or Public Key in environment');
@@ -35,6 +36,7 @@ export const sendEmailJS = async (templateId, templateParams, toEmail) => {
         service_id: serviceId,
         template_id: templateId,
         user_id: publicKey,
+        accessToken: privateKey,
         template_params: params,
       }),
     });
