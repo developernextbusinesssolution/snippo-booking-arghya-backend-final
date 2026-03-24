@@ -11,6 +11,7 @@ export default function BookingPage({
   bookings,
   busySlots,
   onCreateBooking,
+  onNavigateToPayment,
   onGoDash,
   onGoHome,
   stripeKey,
@@ -59,31 +60,25 @@ export default function BookingPage({
             </button>
           </div>
 
-          {/* Page Title */}
           <div className="home-title">
-            {preselectedService ? preselectedService.name : "Book a Session"}
+            Create Your Artist Profile
           </div>
           <div className="home-sub">
             <span>
-              {preselectedService
-                ? preselectedService.desc
-                : "Select your details below to complete your booking."}
+              Fill out your details below to join Snippo Entertainment and start collaborating.
             </span>
           </div>
 
           <BookingForm
             user={user}
-            onNeedAuth={handleNeedAuth}
             services={services}
             staff={staff}
             bookings={bookings}
             busySlots={busySlots}
-            onCreateBooking={onCreateBooking}
+            onUserAuth={onUserAuth}
             onGoDash={onGoDash}
-            onGoHome={onGoHome}
-            stripeKey={stripeKey}
-            token={token}
-            preselectedService={preselectedService}
+            onNavigateToPayment={onNavigateToPayment}
+            onLoginClick={onLoginClick}
           />
         </div>
       </div>

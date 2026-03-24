@@ -2,12 +2,18 @@ import { readData, updateData, nextCounter, getPagedBookings } from "../store.js
 import { formatDateForUi, normalizeTimeLabel, toDollarAmount } from "../utils.js";
 import { asyncHandler, httpError } from "../utils/errorHelpers.js";
 import { resolveStaffForUser } from "../utils/userHelpers.js";
-import { sendEmail, sendTemplatedEmail } from "../utils/mailer.js";
+import { sendEmail, sendTemplatedEmail, sendEmailJS } from "../utils/mailer.js";
+import User from "../models/User.js";
+import Booking from "../models/Booking.js";
+import { makeToken, sanitizeUser, hashPassword } from "../auth.js";
+import Stripe from "stripe";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY?.trim());
 
 export const getBookings = asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page || "1");
   const limit = parseInt(req.query.limit || "10");
-  
+
   const data = await readData();
   const user = data.users.find((item) => item.id === req.authUser.id);
 
@@ -32,73 +38,115 @@ export const getBookings = asyncHandler(async (req, res) => {
     res.json({ data: [], total: 0, pages: 0, currentPage: page });
     return;
   }
-  
+
   const paged = await getPagedBookings({ staffName: staffRef.name, page, limit });
   res.json(paged);
 });
 
 export const createBooking = asyncHandler(async (req, res) => {
-  const { serviceId, staffId, date, time, details } = req.body || {};
+  const { serviceId, staffId, date, time, details, peopleCount } = req.body || {};
 
   let createdBooking;
-  await updateData(async (data) => {
-    const user = data.users.find((item) => item.id === req.authUser.id);
+  let customerInfo;
+  let authToken = null;
+  let authUser = null;
+
+  // 1. Resolve or Create User
+  if (req.authUser) {
+    const user = await User.findOne({ id: req.authUser.id });
+    if (!user) throw httpError(401, "Session invalid");
+
+    // Update user address if provided in details
+    let changed = false;
+    ['address', 'city', 'state', 'zip', 'country'].forEach(k => {
+      if (details[k] && details[k] !== user[k]) {
+        user[k] = details[k];
+        changed = true;
+      }
+    });
+    if (changed) await user.save();
+
+    customerInfo = { id: user.id, name: user.name, email: user.email, phone: user.phone, address: user.address, city: user.city, state: user.state, zip: user.zip, country: user.country };
+    authUser = sanitizeUser(user);
+    authToken = null; // No need to refresh token for existing users unless desired
+  } else {
+    // Guest booking: Auto-create user
+    if (!details?.email || !details?.name) {
+      throw httpError(400, "Guest name and email are required");
+    }
+    const email = String(details.email).trim().toLowerCase();
+    let user = await User.findOne({ email }).lean();
+    
     if (!user) {
-      throw httpError(401, "Session invalid");
+      const newUserId = await nextCounter("user");
+      // Use provided password or generate random one
+      const password = String(details.password || "").trim();
+      const passwordHash = password ? await hashPassword(password) : await hashPassword("guest-" + Math.random().toString(36).slice(-8)); 
+      
+      user = await User.create({
+        id: newUserId,
+        name: String(details.name).trim(),
+        email: email,
+        phone: String(details.phone || "").trim(),
+        address: String(details.address || "").trim(),
+        city: String(details.city || "").trim(),
+        state: String(details.state || "").trim(),
+        zip: String(details.zip || "").trim(),
+        country: String(details.country || "IN").trim().toUpperCase(),
+        passwordHash: passwordHash,
+        idDocument: String(details.idImage || "").trim(), // New: ID verification doc
+        role: "user",
+        status: "active",
+        createdAt: new Date().toISOString()
+      });
+      console.log(`[booking] Registered user during booking: ${email}`);
     }
 
+    customerInfo = { id: user.id, name: user.name, email: user.email, phone: user.phone, address: user.address, city: user.city, state: user.state, zip: user.zip, country: user.country };
+    authUser = sanitizeUser(user);
+    authToken = makeToken(user);
+  }
+
+  // 2. Prepare Booking Data (but don't save yet if we want to confirm payment first? 
+  // No, user wants it created "at that time").
+  await updateData(async (data) => {
     const service = data.services.find((item) => item.id === Number(serviceId) && item.active);
-    if (!service) {
-      throw httpError(400, "Selected service is unavailable");
-    }
+    if (!service) throw httpError(400, "Selected service is unavailable");
 
     const staffMember = data.staff.find((item) => item.id === Number(staffId) && item.active);
-    if (!staffMember) {
-      throw httpError(400, "Selected staff member is unavailable");
-    }
-
-    if (!staffMember.services.includes(Number(service.id))) {
-      throw httpError(400, "Selected staff member is not assigned to this service");
-    }
+    if (!staffMember) throw httpError(400, "Selected staff member is unavailable");
 
     const dateLabel = formatDateForUi(date);
     const timeLabel = normalizeTimeLabel(time);
-    if (!dateLabel || !timeLabel) {
-      throw httpError(400, "Invalid date or time");
-    }
-
-    const hasConflict = data.bookings.some(
-      (booking) =>
-        booking.stf === staffMember.name &&
-        booking.dt === dateLabel &&
-        booking.t === timeLabel &&
-        ["upcoming", "active"].includes(booking.s)
-    );
-
-    if (hasConflict) {
-      throw httpError(409, "Selected slot is already booked");
-    }
-
+    
     const bookingId = `BK-${await nextCounter("booking")}`;
-    const customerName = String(details?.name || user.name || "").trim() || user.name;
+    console.log(`[BACKEND] Creating booking ${bookingId} for email: ${customerInfo.email}`);
 
-    // Dynamic pricing: staff hourlyRate × service duration hours, fall back to service price
-    const durationHours = parseInt(service.dur || "120") / 60;
-    const finalPrice = staffMember.hourlyRate > 0
-      ? Math.round(durationHours * staffMember.hourlyRate)
+    // Pricing
+    const baseDurationHours = parseInt(service.dur || "60") / 60;
+    let finalPrice = staffMember.hourlyRate > 0
+      ? Math.round(baseDurationHours * staffMember.hourlyRate)
       : service.price;
+    
+    const guests = parseInt(peopleCount || "1") || 1;
+    if (guests > 1) {
+      finalPrice = Math.round(finalPrice * (1 + (guests - 1) * 0.2));
+    }
 
     createdBooking = {
       id: bookingId,
-      userId: user.id,
+      userId: customerInfo.id,
+      name: customerInfo.name,
+      email: customerInfo.email,
+      phone: customerInfo.phone,
+      peopleCount: guests,
       svc: service.name,
       stf: staffMember.name,
       dt: dateLabel,
       t: timeLabel,
       p: toDollarAmount(finalPrice),
-      s: "upcoming",
-      paid: true,
-      u: customerName,
+      s: "pending_payment", // Initial status
+      paid: false,
       serviceId: service.id,
       staffId: staffMember.id,
       notes: String(details?.notes || "").trim(),
@@ -110,43 +158,43 @@ export const createBooking = asyncHandler(async (req, res) => {
     return createdBooking;
   });
 
-  res.status(201).json(createdBooking);
-
-  // 1. To User
-  sendTemplatedEmail("user_booking_confirmation", req.authUser.email, {
-    name: createdBooking.u,
-    bookingId: createdBooking.id,
-    service: createdBooking.svc,
-    staff: createdBooking.stf,
-    date: createdBooking.dt,
-    time: createdBooking.t
-  }).catch(err => console.error('Failed to send user confirmation email', err));
-
-  // 2. To Staff (Find staff email in data)
-  readData().then(data => {
-    const staffMember = data.staff.find(s => s.id === createdBooking.staffId);
-    if (staffMember && staffMember.email) {
-      sendTemplatedEmail("staff_booking_notification", staffMember.email, {
-        staff: staffMember.name,
-        bookingId: createdBooking.id,
-        name: createdBooking.u,
-        service: createdBooking.svc,
-        date: createdBooking.dt,
-        time: createdBooking.t
-      }).catch(err => console.error('Failed to notify staff', err));
+  // 3. Create Stripe Payment Intent
+  let clientSecret = "";
+  if (!process.env.STRIPE_SECRET_KEY) {
+    console.warn("[booking] STRIPE_SECRET_KEY missing - skipping payment intent");
+  } else {
+    try {
+      const priceInCents = Math.round(parseFloat(createdBooking.p.replace("$", "")) * 100);
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: priceInCents,
+        currency: "usd",
+        metadata: { bookingId: createdBooking.id, userId: createdBooking.userId },
+        description: `Booking for ${createdBooking.svc} - ${createdBooking.id}`,
+        shipping: {
+          name: customerInfo.name,
+          address: {
+            line1: customerInfo.address || 'N/A',
+            city: customerInfo.city || 'N/A',
+            state: customerInfo.state || 'N/A',
+            postal_code: customerInfo.zip || 'N/A',
+            country: customerInfo.country || 'IN',
+          }
+        },
+        automatic_payment_methods: { enabled: true },
+      });
+      clientSecret = paymentIntent.client_secret;
+      console.log(`[booking] Created PaymentIntent for booking ${createdBooking.id}`);
+    } catch (err) {
+      console.error("[booking] Stripe Error:", err.message);
     }
-  });
+  }
 
-  // 3. To Admin
-  sendTemplatedEmail("admin_booking_alert", process.env.SMTP_FROM_EMAIL, {
-    bookingId: createdBooking.id,
-    name: createdBooking.u,
-    email: req.authUser.email,
-    staff: createdBooking.stf,
-    service: createdBooking.svc,
-    date: createdBooking.dt,
-    time: createdBooking.t
-  }).catch(err => console.error('Failed to notify admin', err));
+  res.status(201).json({
+    booking: createdBooking,
+    clientSecret,
+    token: authToken,
+    user: authUser
+  });
 });
 
 export const extendBooking = asyncHandler(async (req, res) => {
@@ -233,75 +281,139 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
   await updateData(async (data) => {
     const booking = data.bookings.find((item) => item.id === id);
     if (!booking) throw httpError(404, "Booking not found");
-    
-    // Safety check for staff
+    console.log(`[BACKEND] Updating status for ${id} from ${booking.s} to ${status}`);
+
     if (req.authUser.role === "staff") {
-       const staffRef = data.staff.find(s => s.id === req.authUser.staffId);
-       if (!staffRef || booking.stf !== staffRef.name) {
-         throw httpError(403, "You can only update status for your own bookings");
-       }
+      const staffRef = data.staff.find(s => s.id === req.authUser.staffId);
+      if (!staffRef || booking.stf !== staffRef.name) {
+        throw httpError(403, "You can only update status for your own bookings");
+      }
+    } else if (req.authUser.role === "user") {
+      if (booking.userId !== req.authUser.id) {
+        throw httpError(403, "Forbidden");
+      }
+      if (status === "upcoming" && booking.s !== "pending_payment") {
+        throw httpError(400, "Only pending payments can be finalized to upcoming");
+      }
     }
 
-    const oldStatus = booking.s;
+    console.log(`[BACKEND] Updating status to ${status} for booking ${id}`);
     booking.s = status;
+    if (status === "upcoming") {
+      booking.paid = true;
+    }
     updated = { ...booking };
     return updated;
   });
 
   res.json(updated);
 
-  // Automation on completion or cancellation
-  if (status === "completed" || status === "cancelled") {
-    // Fetch customer email for notifications
+  if (status === "upcoming" || status === "completed" || status === "cancelled") {
     const data = await readData();
     const customer = data.users.find(u => u.id === updated.userId);
     const targetEmail = customer?.email || req.authUser.email;
 
     const emailVars = {
-      name: updated.u,
+      name: updated.name || updated.u,
       bookingId: updated.id,
       service: updated.svc,
       staff: updated.stf,
       date: updated.dt,
-      time: updated.t
+      time: updated.t,
+      price: updated.p,
+      status: status
     };
 
-    if (status === "completed") {
-      // To User (Actual Customer)
+    if (status === "upcoming") {
+      sendEmailJS(process.env.EMAILJS_TEMPLATE_ID_CUSTOMER, {
+        ...emailVars,
+        customer_name: emailVars.name,
+        invoice_id: updated.id,
+        booking_date: updated.dt,
+        service_name: updated.svc,
+        total_amount: updated.p,
+        payment_status: "Paid"
+      }, targetEmail).catch(err => console.error("Confirmation email failed", err));
+
+      const staffMember = data.staff.find(s => s.id === updated.staffId);
+      if (staffMember && staffMember.email) {
+        sendEmailJS(process.env.EMAILJS_TEMPLATE_ID_STAFF, {
+          ...emailVars,
+          staff_name: staffMember.name,
+          customer_name: emailVars.name,
+          customer_phone: updated.phone,
+          time_slot: updated.t
+        }, staffMember.email).catch(err => console.error("Staff notification email failed", err));
+      }
+    } 
+    else if (status === "completed") {
       sendTemplatedEmail("booking_completed", targetEmail, emailVars)
         .catch(err => console.error("Completion email to user failed", err));
-      
-      // To Review Link (separate email to Customer)
-      sendTemplatedEmail("booking_review_request", targetEmail, {
-        ...emailVars,
-        reviewLinkPath: "/user/dashboard/bookings"
-      }).catch(err => console.error("Review request email failed", err));
 
-      // To Staff
       const staffMember = data.staff.find(s => s.id === updated.staffId);
       if (staffMember && staffMember.email) {
         sendTemplatedEmail("booking_completed", staffMember.email, emailVars)
           .catch(err => console.error("Completion email to staff failed", err));
       }
-
-      // To Admin
-      sendTemplatedEmail("booking_completed", process.env.SMTP_FROM_EMAIL, emailVars)
-        .catch(err => console.error("Completion email to admin failed", err));
     } else if (status === "cancelled") {
-      // To User
       sendTemplatedEmail("booking_cancelled", targetEmail, emailVars)
         .catch(err => console.error("Cancellation email to user failed", err));
 
-      // To Staff
       const staffMember = data.staff.find(s => s.id === updated.staffId);
       if (staffMember && staffMember.email) {
         sendTemplatedEmail("booking_cancelled", staffMember.email, emailVars)
           .catch(err => console.error("Cancellation email to staff failed", err));
       }
-
-      // To Admin
-      sendTemplatedEmail("booking_cancelled", process.env.SMTP_FROM_EMAIL, emailVars)
-        .catch(err => console.error("Cancellation email to admin failed", err));
     }
   }
+});
+
+export const getBooking = asyncHandler(async (req, res) => {
+  const id = String(req.params.id);
+  console.log(`[BACKEND] Fetching booking metadata for ID: ${id}`);
+  const data = await readData();
+  const booking = data.bookings.find((b) => b.id === id);
+
+  if (!booking) throw httpError(404, "Booking not found");
+
+  const user = data.users.find(u => u.id === req.authUser.id);
+  if (!user) throw httpError(401, "Session invalid");
+
+  if (user.role === "admin") { /* ok */ }
+  else if (user.role === "staff") {
+    const staffRef = data.staff.find(s => s.id === user.staffId);
+    if (!staffRef || booking.stf !== staffRef.name) throw httpError(403, "Forbidden");
+  } else if (user.role === "user") {
+    if (booking.userId !== user.id) throw httpError(403, "Forbidden");
+  }
+
+  let clientSecret = "";
+  if (booking.s === "pending_payment" && process.env.STRIPE_SECRET_KEY) {
+    try {
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY.trim());
+      const priceInCents = Math.round(parseFloat(booking.p.replace("$", "")) * 100);
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: priceInCents,
+        currency: "usd",
+        metadata: { bookingId: booking.id, userId: booking.userId },
+        description: `Booking for ${booking.svc} - ${booking.id}`,
+        shipping: {
+          name: user.name,
+          address: {
+            line1: user.address || 'N/A',
+            city: user.city || 'N/A',
+            state: user.state || 'N/A',
+            postal_code: user.zip || 'N/A',
+            country: user.country || 'IN',
+          }
+        },
+        automatic_payment_methods: { enabled: true },
+      });
+      clientSecret = paymentIntent.client_secret;
+    } catch (err) {
+      console.error("Stripe Error in getBooking:", err.message);
+    }
+  }
+
+  res.json({ ...booking, clientSecret });
 });

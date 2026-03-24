@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import Toasts, { useToast } from "../components/Shared/Toasts";
-import { apiRequest } from "../utils/api";
+import { apiRequest, STATIC_BASE } from "../utils/api";
 import Pagination from "../components/Shared/Pagination";
 
 function UserBookingDetailModal({ booking, onClose, onExtend }) {
@@ -840,7 +840,20 @@ export default function UserDash({ user, onSignOut, bookings, services, staff, o
                     <input className="inp" type={fi.t} value={prof[fi.k] || ""} onChange={e => setProf({ ...prof, [fi.k]: e.target.value })} />
                   </div>
                 ))}
+                {saved.idDocument && (
+                  <div style={{ marginTop: 15, paddingTop: 15, borderTop: "1px solid var(--border)" }}>
+                    <label className="lbl">ID VERIFICATION DOCUMENT</label>
+                    <div style={{ marginTop: 8, borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)", background: "#000" }}>
+                      <img 
+                        src={saved.idDocument.startsWith("http") || saved.idDocument.startsWith("data:") ? saved.idDocument : `${STATIC_BASE}/uploads/ids/${saved.idDocument}`} 
+                        alt="ID Proof" 
+                        style={{ width: "100%", maxHeight: 200, objectFit: "contain", display: "block" }} 
+                      />
+                    </div>
+                  </div>
+                )}
                 <button
+
                   className="btn btn-p"
                   style={{ marginTop: 5 }}
                   onClick={async () => {

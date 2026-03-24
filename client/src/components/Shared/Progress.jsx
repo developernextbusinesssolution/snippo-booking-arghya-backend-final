@@ -1,23 +1,23 @@
 import { STEPS } from "../../utils/helpers";
 
-export default function Progress({ step, skipService = false }) {
-  const effectiveSteps = skipService ? STEPS.slice(1) : STEPS;
-  const currentVisualStep = skipService ? step - 1 : step;
+export default function Progress({ step, forceTotal, label, steps }) {
+  const currentSteps = steps || STEPS;
+  const currentLabel = label || currentSteps[step];
 
   return (
     <>
       <div className="prog">
-        {effectiveSteps.map((l, i) => (
+        {currentSteps.map((l, i) => (
           <div className="prog-step" key={i}>
             <div className="prog-lw">
-              <div className={`pdot ${i < currentVisualStep ? "pd" : i === currentVisualStep ? "pa" : "pf"}`}>
-                {i < currentVisualStep ? "✓" : i + 1}
+              <div className={`pdot ${i < step ? "pd" : i === step ? "pa" : "pf"}`}>
+                {i < step ? "✓" : i + 1}
               </div>
-              {i < effectiveSteps.length - 1 && (
-                <div className={`pline ${i < currentVisualStep ? "done" : ""}`} />
+              {i < currentSteps.length - 1 && (
+                <div className={`pline ${i < step ? "done" : ""}`} />
               )}
             </div>
-            <div className={`plbl ${i === currentVisualStep ? "act" : i < currentVisualStep ? "done" : ""}`}>
+            <div className={`plbl ${i === step ? "act" : i < step ? "done" : ""}`}>
               {l}
             </div>
           </div>
@@ -25,13 +25,13 @@ export default function Progress({ step, skipService = false }) {
       </div>
       <div className="prog-mini">
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 1 }}>
-            {effectiveSteps[currentVisualStep]}
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 1, textTransform: "uppercase", letterSpacing: ".05em" }}>
+            Step {step + 1}: {currentLabel}
           </div>
         </div>
         <div className="pm-dots">
-          {effectiveSteps.map((_, i) => (
-            <div key={i} className={`pm ${i < currentVisualStep ? "done" : i === currentVisualStep ? "act" : ""}`} />
+          {currentSteps.map((_, i) => (
+            <div key={i} className={`pm ${i < step ? "done" : i === step ? "act" : ""}`} />
           ))}
         </div>
       </div>

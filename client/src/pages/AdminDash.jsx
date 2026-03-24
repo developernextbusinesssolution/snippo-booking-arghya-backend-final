@@ -182,6 +182,45 @@ function StaffModal({ member, services, onSave, onClose }) {
   );
 }
 
+function SecurityModal({ onSave, onClose }) {
+  const [f, setF] = useState({ name: "", email: "", password: "" });
+  return (
+    <div className="mov" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal modal-lg">
+        <button
+          onClick={onClose}
+          style={{ position: "absolute", top: 11, right: 11, background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 19, width: 32, height: 32, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          ✕
+        </button>
+        <div style={{ fontWeight: 800, fontSize: 19, marginBottom: 18, letterSpacing: "-.02em" }}>Create Security User</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+          <div>
+            <label className="lbl">FULL NAME</label>
+            <input className="inp" placeholder="e.g. John Doe" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} />
+          </div>
+          <div>
+            <label className="lbl">EMAIL</label>
+            <input className="inp" type="email" placeholder="security@snippoentertainment.com" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} />
+          </div>
+          <div>
+            <label className="lbl">PASSWORD</label>
+            <input className="inp" type="password" placeholder="Strong password" value={f.password} onChange={e => setF({ ...f, password: e.target.value })} />
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 9, marginTop: 20 }}>
+          <button className="btn btn-g" style={{ flex: 1 }} onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn btn-p" style={{ flex: 1 }} onClick={() => { if (!f.name || !f.email || !f.password) return; onSave(f); }}>
+            Create Account
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BookingDetailModal({ booking, onClose, onStatusChange }) {
   const bmap = { upcoming: "bu", completed: "bc", cancelled: "bx", active: "ba" };
   const hasExtension = (booking.additionalHours || 0) > 0;
@@ -294,13 +333,13 @@ function ApprovalDetailsModal({ staff, onApprove, onReject, onClose }) {
           {staff.idDocument ? (
             <div style={{ marginTop: 8, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", background: "#000" }}>
               <img 
-                src={staff.idDocument.startsWith("data:") ? staff.idDocument : `${STATIC_BASE}/uploads/ids/${staff.idDocument}`} 
+                src={staff.idDocument.startsWith("http") || staff.idDocument.startsWith("data:") ? staff.idDocument : `${STATIC_BASE}/uploads/ids/${staff.idDocument}`} 
                 alt="ID Document" 
                 style={{ width: "100%", maxHeight: 300, objectFit: "contain", display: "block" }} 
               />
               <div style={{ padding: 10, textAlign: "center", background: "rgba(255,255,255,0.03)" }}>
                 <a 
-                  href={staff.idDocument.startsWith("data:") ? staff.idDocument : `${STATIC_BASE}/uploads/ids/${staff.idDocument}`} 
+                  href={staff.idDocument.startsWith("http") || staff.idDocument.startsWith("data:") ? staff.idDocument : `${STATIC_BASE}/uploads/ids/${staff.idDocument}`} 
                   target="_blank" 
                   rel="noreferrer" 
                   style={{ fontSize: 12, color: "var(--red)", fontWeight: 600, textDecoration: "none" }}
@@ -446,13 +485,13 @@ function UserDetailsModal({ user, onClose }) {
           {user.idDocument ? (
             <div style={{ marginTop: 8, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", background: "#000" }}>
               <img 
-                src={user.idDocument.startsWith("data:") ? user.idDocument : `${STATIC_BASE}/uploads/ids/${user.idDocument}`} 
+                src={user.idDocument.startsWith("http") || user.idDocument.startsWith("data:") ? user.idDocument : `${STATIC_BASE}/uploads/ids/${user.idDocument}`} 
                 alt="ID Document" 
                 style={{ width: "100%", maxHeight: 300, objectFit: "contain", display: "block" }} 
               />
               <div style={{ padding: 10, textAlign: "center", background: "rgba(255,255,255,0.03)" }}>
                 <a 
-                  href={user.idDocument.startsWith("data:") ? user.idDocument : `${STATIC_BASE}/uploads/ids/${user.idDocument}`} 
+                  href={user.idDocument.startsWith("http") || user.idDocument.startsWith("data:") ? user.idDocument : `${STATIC_BASE}/uploads/ids/${user.idDocument}`} 
                   target="_blank" 
                   rel="noreferrer" 
                   style={{ fontSize: 12, color: "var(--red)", fontWeight: 600, textDecoration: "none" }}
@@ -467,6 +506,23 @@ function UserDetailsModal({ user, onClose }) {
             </div>
           )}
         </div>
+
+        {user.role === "security" && user.availability && (
+          <div style={{ marginBottom: 20 }}>
+            <label className="lbl">SECURITY SHIFTS</label>
+            <div className="glass" style={{ padding: 12, marginTop: 10, background: 'rgba(255,255,255,0.02)' }}>
+              {user.availability.filter(a => a.enabled).map(a => (
+                <div key={a.day} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 5 }}>
+                  <span style={{ fontWeight: 700 }}>{a.day}</span>
+                  <span style={{ color: 'var(--muted)' }}>{a.startTime} – {a.endTime}</span>
+                </div>
+              ))}
+              {user.availability.filter(a => a.enabled).length === 0 && (
+                <div style={{ color: 'var(--muted)', fontSize: 12, textAlign: 'center' }}>No shifts assigned</div>
+              )}
+            </div>
+          </div>
+        )}
 
         <button className="btn btn-g" style={{ width: "100%" }} onClick={onClose}>
           Close Details
@@ -484,6 +540,7 @@ export default function AdminDash({ services, setServices, staff, setStaff, book
   const changeSec = s => { setSec(s); onSecChange?.(s); };
   const [svcModal, setSvcModal] = useState(null);
   const [staffModal, setStaffModal] = useState(null);
+  const [secModal, setSecModal] = useState(null);
   const [delConfirm, setDelConfirm] = useState(null);
   const [bDetail, setBDetail] = useState(null);
   const [bFilter, setBFilter] = useState("all");
@@ -523,7 +580,7 @@ export default function AdminDash({ services, setServices, staff, setStaff, book
     if (data.data) {
       if (sec === "bookings") setBookings(data.data);
       if (sec === "staff") setStaff(data.data);
-      if (sec === "users") setUsers(data.data);
+      if (sec === "users" || sec === "security") setUsers(data.data); // security users come from the users query
       setPages(p => ({ ...p, [sec]: data.pages }));
     } else if (data.templates) {
       setTemplates(data.templates);
@@ -533,7 +590,7 @@ export default function AdminDash({ services, setServices, staff, setStaff, book
   };
 
   useEffect(() => {
-    if (["bookings", "staff", "users", "payments", "emails"].includes(sec)) {
+    if (["bookings", "staff", "users", "security", "payments", "emails"].includes(sec)) {
       reloadAdminData(sec, curPages[sec]);
     }
   }, [sec, curPages]);
@@ -565,6 +622,19 @@ export default function AdminDash({ services, setServices, staff, setStaff, book
       }
       await reloadAdminData();
       setStaffModal(null);
+    } catch (e) {
+      toast(e.message || "Action failed", "error");
+    }
+  };
+
+  const saveSecurity = async (f) => {
+    try {
+      if (secModal === "add") {
+        await apiRequest("/admin/security-users", { method: "POST", token, body: f });
+        toast("Security user created!", "success");
+      }
+      await reloadAdminData();
+      setSecModal(null);
     } catch (e) {
       toast(e.message || "Action failed", "error");
     }
@@ -717,6 +787,16 @@ export default function AdminDash({ services, setServices, staff, setStaff, book
         </svg>
       ),
       l: "Users",
+    },
+    {
+      id: "security",
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+      ),
+      l: "Security",
     },
     {
       id: "approvals",
@@ -1073,7 +1153,7 @@ export default function AdminDash({ services, setServices, staff, setStaff, book
                         </td>
                         <td>
                           {u.idDocument ? (
-                            <a href={`${STATIC_BASE}/uploads/ids/${u.idDocument}`} target="_blank" rel="noreferrer" className="badge bg-p" style={{ fontSize: 10, textDecoration: 'none' }}>
+                            <a href={u.idDocument.startsWith("http") ? u.idDocument : `${STATIC_BASE}/uploads/ids/${u.idDocument}`} target="_blank" rel="noreferrer" className="badge bg-p" style={{ fontSize: 10, textDecoration: 'none' }}>
                               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                               View ID
                             </a>
@@ -1108,6 +1188,67 @@ export default function AdminDash({ services, setServices, staff, setStaff, book
               </table>
             </div>
             <Pagination current={curPages.users} total={pages.users} onPage={p => setCurPages(cp => ({ ...cp, users: p }))} />
+          </>
+        )}
+
+        {sec === "security" && (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
+              <div>
+                <h1 className="sh">Security Personnel</h1>
+                <p className="ss" style={{ marginBottom: 0 }}>Manage users with access to the Security Dashboard. They can login via the <strong>main website Sign In</strong> button.</p>
+              </div>
+              <button className="btn btn-p btn-sm" onClick={() => setSecModal("add")}>
+                + Add Security User
+              </button>
+            </div>
+            <div className="glass tw">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Role Title</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.filter(u => u.role === "security").length === 0 ? (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: "center", color: "var(--muted)", padding: 28 }}>
+                        No security users found
+                      </td>
+                    </tr>
+                  ) : (
+                    users.filter(u => u.role === "security").map(u => (
+                      <tr key={u.id}>
+                        <td style={{ fontFamily: "monospace", color: "var(--muted)", fontSize: 11 }}>{u.id}</td>
+                        <td style={{ fontWeight: 600 }}>{u.name}</td>
+                        <td style={{ fontSize: 13, color: "var(--muted)" }}>{u.roleTitle || "Security"}</td>
+                        <td>{u.email}</td>
+                        <td>
+                          <span style={{ color: u.status === "active" ? "var(--success)" : "var(--muted)" }}>● {u.status}</span>
+                        </td>
+                        <td>
+                          <button 
+                            className="btn btn-o btn-sm" 
+                            style={{ padding: "4px 10px", height: "auto", color: "var(--red)", border: "1px solid var(--border-red)" }} 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDelConfirm({ type: "user", id: u.id, name: u.name });
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
         {sec === "approvals" && (
@@ -1315,6 +1456,7 @@ export default function AdminDash({ services, setServices, staff, setStaff, book
 
       {svcModal && <ServiceModal svc={svcModal === "add" ? null : svcModal} services={services} onSave={saveSvc} onClose={() => setSvcModal(null)} />}
       {staffModal && <StaffModal member={staffModal === "add" ? null : staffModal} services={services} onSave={saveStaff} onClose={() => setStaffModal(null)} />}
+      {secModal && <SecurityModal onSave={saveSecurity} onClose={() => setSecModal(null)} />}
       {delConfirm && <Confirm msg={`Delete "${delConfirm.name}"? This action cannot be undone.`} onOk={doDelete} onCancel={() => setDelConfirm(null)} />}
       {bDetail && <BookingDetailModal booking={bDetail} onClose={() => setBDetail(null)} onStatusChange={updateStatus} />}
       {viewingUserDetail && <UserDetailsModal user={viewingUserDetail} onClose={() => setViewingUserDetail(null)} />}

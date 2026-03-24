@@ -14,7 +14,8 @@ import {
   saveStripeSettings,
   testEmail,
   getTemplates,
-  saveTemplate
+  saveTemplate,
+  createSecurityUser
 } from "../controllers/adminController.js";
 import { updateBookingStatus } from "../controllers/bookingController.js";
 import { requireAuth } from "../middlewares/authMiddleware.js";
@@ -31,6 +32,7 @@ router.post("/staff", createStaff);
 router.put("/staff/:id", updateStaff);
 router.delete("/staff/:id", deleteStaff);
 router.delete("/users/:id", deleteUser);
+router.post("/security-users", createSecurityUser);
 router.patch("/bookings/:id/status", updateBookingStatus);
 router.post("/pending/:id/approve", approvePendingStaff);
 router.post("/pending/:id/reject", rejectPendingStaff);

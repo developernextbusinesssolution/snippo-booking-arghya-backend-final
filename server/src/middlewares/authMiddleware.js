@@ -1,4 +1,4 @@
-import { pool, rowToUser } from "../store.js";
+import User from "../models/User.js";
 import { asyncHandler, httpError } from "../utils/errorHelpers.js";
 import { getBearerToken, verifyToken } from "../auth.js";
 
@@ -10,8 +10,7 @@ async function resolveTokenUser(req) {
 
   try {
     const payload = verifyToken(token);
-    const res = await pool.query(`SELECT * FROM users WHERE id = $1`, [payload.id]);
-    const user = rowToUser(res.rows[0]);
+    const user = await User.findOne({ id: payload.id }).lean();
     return user || null;
   } catch {
     return null;

@@ -4,7 +4,7 @@ import { requireAuth } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-// Payments are currently open to authenticated users
-router.post("/create-intent", requireAuth(), createPaymentIntent);
+// Payments are open to all (authenticated or guest)
+router.post("/create-intent", createPaymentIntent);
 
 export default router;

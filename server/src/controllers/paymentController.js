@@ -20,6 +20,7 @@ export const createPaymentIntent = asyncHandler(async (req, res) => {
       amount: Math.round(amount * 100), // Stripe expects amount in cents
       currency,
       metadata,
+      description: `Payment for Service - ${metadata.bookingId || 'General'}`,
       automatic_payment_methods: {
         enabled: true,
       },

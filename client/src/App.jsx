@@ -18,6 +18,8 @@ import StaffAuthPage from "./pages/StaffAuthPage";
 import UserDash from "./pages/UserDash";
 import AdminDash from "./pages/AdminDash";
 import StaffPortal from "./pages/StaffPortal";
+import PaymentPage from "./pages/PaymentPage";
+import SecurityDash from "./pages/SecurityDash";
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
 /*
@@ -40,6 +42,7 @@ export default function App(){
   const [user,setUser]                   = useState(null);
   const [admin,setAdmin]                 = useState(null);
   const [staffUser,setStaffUser]         = useState(null);
+  const [securityUser,setSecurityUser]   = useState(null);
   const [services,setServices]           = useState(SVCS);
   const [staff,setStaff]                 = useState(STAFF0);
   const [bookings,setBookings]           = useState(BKGS0);
@@ -50,6 +53,7 @@ export default function App(){
   const [userDashTab,setUserDashTab]     = useState("bookings");
   const [token,setToken]                 = useState(null);
   const [stripeKey,setStripeKey]         = useState(null);
+  const [paymentBookingId,setPaymentBookingId]     = useState(null);
   const [booting,setBooting]             = useState(true);
   const [showAuthModal,setShowAuthModal] = useState(false);
   const [selectedServiceSlug,setSelectedServiceSlug] = useState(null);
@@ -63,6 +67,7 @@ export default function App(){
     }
     setPage(pg);
     if(pg==='book_service')setSelectedServiceSlug(sub);
+    if(pg==='payment')setPaymentBookingId(sub);
     if(sub){
       if(pg==='admin_dash')setAdminSec(sub);
       else if(pg==='staff_dash')setStaffTab(sub);
@@ -92,6 +97,7 @@ export default function App(){
       const {page:pg,sub}=parsePath(window.location.pathname);
       setPage(pg);
       if(pg==='book_service')setSelectedServiceSlug(sub);
+      if(pg==='payment')setPaymentBookingId(sub);
       if(sub){
         if(pg==='admin_dash')setAdminSec(sub);
         else if(pg==='staff_dash')setStaffTab(sub);
@@ -133,10 +139,10 @@ export default function App(){
 
       if(embedMode){
         if(me?.user?.role==="user"){
-          setUser(me.user);setAdmin(null);setStaffUser(null);
+          setUser(me.user);setAdmin(null);setStaffUser(null);setSecurityUser(null);
         }else{
           if(me){clearSession();setToken(null);}
-          setUser(null);setAdmin(null);setStaffUser(null);
+          setUser(null);setAdmin(null);setStaffUser(null);setSecurityUser(null);
         }
 
         if(urlState.page==='book_service'&&urlState.sub){
@@ -150,7 +156,7 @@ export default function App(){
       }else if(me?.user?.role==="admin"){
         const sec=urlState.page==='admin_dash'?urlState.sub||'overview':'overview';
         setAdminSec(sec);
-        setAdmin(me.user);setUser(null);setStaffUser(null);
+        setAdmin(me.user);setUser(null);setStaffUser(null);setSecurityUser(null);
         setPage("admin_dash");
         if(!window.location.pathname.startsWith('/admin/dashboard')){
           window.history.replaceState({page:'admin_dash',sub:sec},``,`/admin/dashboard/${sec}`);
@@ -158,15 +164,21 @@ export default function App(){
       }else if(me?.user?.role==="staff"){
         const tab=urlState.page==='staff_dash'?urlState.sub||'schedule':'schedule';
         setStaffTab(tab);
-        setStaffUser({...me.user,staffRef:me.staffRef,staffData:me.staffData});setUser(null);setAdmin(null);
+        setStaffUser({...me.user,staffRef:me.staffRef,staffData:me.staffData});setUser(null);setAdmin(null);setSecurityUser(null);
         setPage("staff_dash");
         if(!window.location.pathname.startsWith('/staff/dashboard')){
           window.history.replaceState({page:'staff_dash',sub:tab},``,`/staff/dashboard/${tab}`);
         }
+      }else if(me?.user?.role==="security"){
+        setSecurityUser(me.user);setUser(null);setAdmin(null);setStaffUser(null);
+        setPage("security_dash");
+        if(!window.location.pathname.startsWith('/security/dashboard')){
+          window.history.replaceState({page:'security_dash',sub:null},``,`/security/dashboard`);
+        }
       }else if(me?.user?.role==="user"){
         const tab=urlState.page==='user_dash'?urlState.sub||'bookings':'bookings';
         setUserDashTab(tab);
-        setUser(me.user);setAdmin(null);setStaffUser(null);
+        setUser(me.user);setAdmin(null);setStaffUser(null);setSecurityUser(null);
         // Redirect user to their desired URL page or home
         if(urlState.page==='user_dash'){
           setPage("user_dash");
@@ -180,13 +192,16 @@ export default function App(){
           }
         }
       }else{
-        setUser(null);setAdmin(null);setStaffUser(null);
+        setUser(null);setAdmin(null);setStaffUser(null);setSecurityUser(null);
         // Honour URL for public pages
         if(urlState.page==='admin_login'){setPage("admin_login");}
         else if(urlState.page==='staff_auth'){setPage("staff_auth");}
         else if(urlState.page==='book_service'&&urlState.sub){
           setSelectedServiceSlug(urlState.sub);
           setPage("book_service");
+        }else if(urlState.page==='payment'&&urlState.sub){
+          setPaymentBookingId(urlState.sub);
+          setPage("payment");
         }else{
           setPage("home");
           if(window.location.pathname!=='/'&&window.location.pathname.startsWith('/admin')||window.location.pathname.startsWith('/staff')||window.location.pathname.startsWith('/user')){
@@ -215,20 +230,22 @@ export default function App(){
     if(embedMode&&payload.user.role!=="user"){
       clearSession();
       setToken(null);
-      setUser(null);setAdmin(null);setStaffUser(null);navigate("home");
+      setUser(null);setAdmin(null);setStaffUser(null);setSecurityUser(null);navigate("home");
       await refreshData(null);
       setShowAuthModal(false);
       return;
     }
 
     if(payload.user.role==="admin"){
-      setAdmin(payload.user);setUser(null);setStaffUser(null);navigate("admin_dash","overview");
+      setAdmin(payload.user);setUser(null);setStaffUser(null);setSecurityUser(null);navigate("admin_dash","overview");
     }else if(payload.user.role==="staff"){
-      setStaffUser({...payload.user,staffRef:payload.staffRef,staffData:payload.staffData});setUser(null);setAdmin(null);
+      setStaffUser({...payload.user,staffRef:payload.staffRef,staffData:payload.staffData});setUser(null);setAdmin(null);setSecurityUser(null);
       navigate("staff_dash","schedule");
+    }else if(payload.user.role==="security"){
+      setSecurityUser(payload.user);setUser(null);setAdmin(null);setStaffUser(null);navigate("security_dash");
     }else{
-      setUser(payload.user);setAdmin(null);setStaffUser(null);
-      if(page!=="book_service")navigate("home");
+      setUser(payload.user);setAdmin(null);setStaffUser(null);setSecurityUser(null);
+      if(page!=="book_service" && page!=="payment") navigate("home");
     }
 
     await refreshData(payload.token);
@@ -241,6 +258,7 @@ export default function App(){
     setUser(null);
     setAdmin(null);
     setStaffUser(null);
+    setSecurityUser(null);
     setShowAuthModal(false);
     navigate("home");
     await refreshData(null);
@@ -268,10 +286,12 @@ export default function App(){
   },[embedMode,page]);
 
   const createBooking=async payload=>{
-    if(!token)throw new Error("Please sign in first");
-    const booking=await apiRequest("/bookings",{method:"POST",token,body:payload});
-    setBookings(p=>[booking,...p]);
-    return booking;
+    const res=await apiRequest("/bookings",{method:"POST",token,body:payload});
+    // res is now { booking, clientSecret, token, user }
+    if(res.booking){
+      setBookings(p=>[res.booking,...p]);
+    }
+    return res;
   };
 
   const openAuth=()=>setShowAuthModal(true);
@@ -305,7 +325,14 @@ export default function App(){
             user={user}
             onUserAuth={handleUserAuth}
             onGoDash={() => goUserDash("bookings")}
+            onNavigateToPayment={(id) => navigate("payment", id)}
             services={services}
+            staff={staff}
+            bookings={bookings}
+            busySlots={globalBusySlots}
+            onCreateBooking={createBooking}
+            stripeKey={stripeKey}
+            token={token}
             onBookService={svc => navigate('book_service', slugify(svc.name))}
             embedMode={embedMode}
             embedHeader={embedMode?<PublicHeader
@@ -340,12 +367,14 @@ export default function App(){
             bookings={bookings}
             busySlots={globalBusySlots}
             onCreateBooking={createBooking}
+            onNavigateToPayment={(id) => navigate("payment", id)}
             onGoDash={() => goUserDash("bookings")}
             onGoHome={() => navigate("home")}
             stripeKey={stripeKey}
             token={token}
             user={user}
             onUserAuth={handleUserAuth}
+            onLoginClick={openAuth}
             embedMode={embedMode}
             embedHeader={embedMode?<PublicHeader
               user={user}
@@ -454,6 +483,47 @@ export default function App(){
           }
         </>}
 
+        {!embedMode&&page==="security_dash" && <>
+          {securityUser
+            ? <>
+                <nav className="nav" style={{zIndex:200}}><div className="nav-logo" style={{cursor:"pointer"}} onClick={()=>navigate("home")}><BrandLogo /></div></nav>
+                <SecurityDash user={securityUser} onSignOut={clearAuthState} token={token} />
+              </>
+            : <>
+                <nav className="nav" style={{zIndex:200}}><div className="nav-logo" style={{cursor:"pointer"}} onClick={()=>navigate("home")}><BrandLogo /></div></nav>
+                <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <div className="glass" style={{padding:40,textAlign:"center"}}>
+                    <h2>Please sign in</h2>
+                    <button className="btn btn-p" onClick={openAuth}>Sign In</button>
+                  </div>
+                </div>
+              </>
+          }
+        </>}
+
+        {page==="payment" && paymentBookingId && (
+          <>
+            {!embedMode && (
+              <PublicHeader 
+                user={user} 
+                onSignOut={signOutUser} 
+                onLoginClick={openAuth} 
+                onGoDash={() => goUserDash("bookings")} 
+                embedMode={embedMode}
+              />
+            )}
+            <PaymentPage 
+              bookingId={paymentBookingId} 
+              onGoDash={() => goUserDash("bookings")} 
+              onGoHome={() => navigate("home")} 
+              stripeKey={stripeKey} 
+              token={token}
+              onCreateBooking={createBooking}
+              services={services}
+              staff={staff}
+            />
+          </>
+        )}
       </div>
     </div>
   </>;

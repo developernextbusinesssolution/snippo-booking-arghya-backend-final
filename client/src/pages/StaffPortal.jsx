@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import Toasts, { useToast } from "../components/Shared/Toasts";
-import { apiRequest } from "../utils/api";
+import { apiRequest, STATIC_BASE } from "../utils/api";
 import { DAYS, initials, fmtDur, formatDateForUi } from "../utils/helpers";
 import { uploadStaffAvatar } from "../utils/supabase";
 
@@ -297,6 +297,18 @@ export default function StaffPortal({ staffUser, allStaff, setAllStaff, bookings
               <span className="sval">{v}</span>
             </div>
           ))}
+          {(staffUser?.idDocument || me?.idDocument) && (
+            <div style={{ marginTop: 15, paddingTop: 15, borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+              <label className="lbl">ID PROOF SUBMITTED</label>
+              <div style={{ marginTop: 8, borderRadius: 10, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)", background: "#000" }}>
+                <img 
+                  src={(staffUser?.idDocument || me?.idDocument).startsWith("http") || (staffUser?.idDocument || me?.idDocument).startsWith("data:") ? (staffUser?.idDocument || me?.idDocument) : `${STATIC_BASE}/uploads/ids/${(staffUser?.idDocument || me?.idDocument)}`} 
+                  alt="ID Proof" 
+                  style={{ width: "100%", maxHeight: 180, objectFit: "contain", display: "block" }} 
+                />
+              </div>
+            </div>
+          )}
         </div>
         <p style={{ color: "var(--muted2)", fontSize: 12, marginBottom: 16 }}>The admin has been notified of your registration.</p>
         <button className="btn btn-danger btn-sm" onClick={onSignOut}>
@@ -589,6 +601,19 @@ export default function StaffPortal({ staffUser, allStaff, setAllStaff, bookings
                     style={{ resize: "vertical", minHeight: 90 }}
                   />
                 </div>
+
+                {(me?.idDocument || staffUser?.idDocument) && (
+                  <div style={{ marginTop: 11, paddingTop: 11, borderTop: "1px solid var(--border)" }}>
+                    <label className="lbl">ID VERIFICATION DOCUMENT</label>
+                    <div style={{ marginTop: 8, borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)", background: "#000" }}>
+                      <img 
+                        src={(me?.idDocument || staffUser?.idDocument).startsWith("http") || (me?.idDocument || staffUser?.idDocument).startsWith("data:") ? (me?.idDocument || staffUser?.idDocument) : `${STATIC_BASE}/uploads/ids/${(me?.idDocument || staffUser?.idDocument)}`} 
+                        alt="ID Proof" 
+                        style={{ width: "100%", maxHeight: 200, objectFit: "contain", display: "block" }} 
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <button
                   className="btn btn-p btn-sm"

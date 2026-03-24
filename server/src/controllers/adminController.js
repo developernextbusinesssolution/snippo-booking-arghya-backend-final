@@ -16,6 +16,8 @@ export const getAdminData = asyncHandler(async (req, res) => {
     pagedData = await getPagedBookings({ page, limit });
   } else if (tab === "staff") {
     pagedData = await getPagedStaff({ page, limit });
+  } else if (tab === "security") {
+    pagedData = await getPagedUsers({ page, limit, role: "security" });
   } else if (tab === "users") {
     pagedData = await getPagedUsers({ page, limit });
   } else if (tab === "emails") {
@@ -286,6 +288,55 @@ export const deleteUser = asyncHandler(async (req, res) => {
   res.status(204).end();
 });
 
+import { hashPassword } from "../auth.js";
+
+export const createSecurityUser = asyncHandler(async (req, res) => {
+  const name = String(req.body?.name || "").trim();
+  const email = normalizeEmail(req.body?.email);
+  const password = String(req.body?.password || "").trim();
+
+  if (!name || !email || !password) throw httpError(400, "Name, email, and password are required");
+
+  let createdUser;
+  await updateData(async (data) => {
+    const duplicate = data.users.find(
+      (item) => normalizeEmail(item.email) === normalizeEmail(email)
+    );
+    if (duplicate) throw httpError(409, "Email already in use");
+
+    createdUser = {
+      id: await nextCounter("user").then(c => c.toString()),
+      name,
+      email,
+      passwordHash: await hashPassword(password),
+      role: "security",
+      status: "active",
+      phone: "",
+      address: "",
+      city: "",
+      state: "",
+      zip: "",
+      country: "",
+      roleTitle: "Security Officer",
+      availability: [
+        { day: "Monday", enabled: true, startTime: "09:00", endTime: "20:00" },
+        { day: "Tuesday", enabled: true, startTime: "09:00", endTime: "20:00" },
+        { day: "Wednesday", enabled: true, startTime: "09:00", endTime: "20:00" },
+        { day: "Thursday", enabled: true, startTime: "09:00", endTime: "20:00" },
+        { day: "Friday", enabled: true, startTime: "09:00", endTime: "20:00" },
+        { day: "Saturday", enabled: false, startTime: "09:00", endTime: "20:00" },
+        { day: "Sunday", enabled: false, startTime: "09:00", endTime: "20:00" }
+      ]
+    };
+
+    data.users.push(createdUser);
+    return createdUser;
+  });
+
+  // Mask password before returning
+  const { passwordHash, ...safeUser } = createdUser;
+  res.status(201).json(safeUser);
+});
 
 export const approvePendingStaff = asyncHandler(async (req, res) => {
   const id = String(req.params.id);

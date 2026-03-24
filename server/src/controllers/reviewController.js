@@ -1,5 +1,7 @@
-import { readData, updateData, pool } from "../store.js";
+import { readData, updateData } from "../store.js";
 import { asyncHandler, httpError } from "../utils/errorHelpers.js";
+import Review from "../models/Review.js";
+import User from "../models/User.js";
 
 export const createReview = asyncHandler(async (req, res) => {
   const { bookingId, rating, comment } = req.body || {};
@@ -19,30 +21,29 @@ export const createReview = asyncHandler(async (req, res) => {
     if (booking.userId !== userId) throw httpError(403, "Forbidden: You can only review your own bookings");
     if (booking.s !== "completed") throw httpError(400, "You can only review completed bookings");
 
-    // 3. Check if already reviewed (PostgreSQL check)
-    const existing = await pool.query(`SELECT id FROM reviews WHERE booking_id = (SELECT id FROM bookings WHERE id = $1 LIMIT 1)`, [bookingId]);
-    if (existing.rows.length > 0) throw httpError(400, "You have already reviewed this booking");
+    // 3. Check if already reviewed
+    const existing = await Review.findOne({ bookingId });
+    if (existing) throw httpError(400, "You have already reviewed this booking");
 
-    // 4. Get numeric ID of booking and staff
-    const bRow = await pool.query(`SELECT id, staff_id FROM bookings WHERE id = $1`, [bookingId]);
-    const numericBookingId = bRow.rows[0].id;
-    const staffId = bRow.rows[0].staff_id;
+    const staffId = booking.staffId;
 
-    // 5. Insert review into PostgreSQL
-    const resReview = await pool.query(
-      `INSERT INTO reviews (booking_id, user_id, staff_id, rating, comment)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [numericBookingId, userId, staffId, rating, comment || ""]
-    );
-    newReview = resReview.rows[0];
+    // 4. Create Review
+    newReview = await Review.create({
+      bookingId,
+      userId,
+      staffId,
+      rating: Number(rating),
+      comment: comment || ""
+    });
 
-    // 6. Update Staff Stats
-    const statsRes = await pool.query(
-      `SELECT AVG(rating) as avg_rating, COUNT(*) as review_count FROM reviews WHERE staff_id = $1`,
-      [staffId]
-    );
-    const newAvg = parseFloat(statsRes.rows[0].avg_rating || 0);
-    const newCount = parseInt(statsRes.rows[0].review_count || 0);
+    // 5. Update Staff Stats
+    const stats = await Review.aggregate([
+      { $match: { staffId } },
+      { $group: { _id: "$staffId", avg_rating: { $avg: "$rating" }, review_count: { $sum: 1 } } }
+    ]);
+
+    const newAvg = stats.length > 0 ? stats[0].avg_rating : 0;
+    const newCount = stats.length > 0 ? stats[0].review_count : 0;
 
     const staffMember = data.staff.find(s => s.id === staffId);
     if (staffMember) {
@@ -57,14 +58,14 @@ export const createReview = asyncHandler(async (req, res) => {
 });
 
 export const getStaffReviews = asyncHandler(async (req, res) => {
-  const { staffId } = req.params;
-  const result = await pool.query(
-    `SELECT r.*, u.name as user_name 
-     FROM reviews r 
-     JOIN users u ON r.user_id = u.id 
-     WHERE r.staff_id = $1 
-     ORDER BY r.created_at DESC`,
-    [staffId]
-  );
-  res.json(result.rows);
+  const staffId = Number(req.params.staffId);
+  const reviews = await Review.find({ staffId }).sort({ createdAt: -1 }).lean();
+  
+  // Join user names (assuming we need user_name for frontend)
+  const reviewsWithUsers = await Promise.all(reviews.map(async (r) => {
+    const user = await User.findOne({ id: r.userId }).select("name").lean();
+    return { ...r, user_name: user?.name || "Deleted User" };
+  }));
+
+  res.json(reviewsWithUsers);
 });

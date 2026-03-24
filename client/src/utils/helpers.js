@@ -2,7 +2,7 @@ export const MNS = ["January", "February", "March", "April", "May", "June", "Jul
 export const DS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 export const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 export const TIMES = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
-export const STEPS = ["Service", "Staff", "Date & Time", "Summary", "Payment", "Confirm"];
+export const STEPS = ["Account", "Identity", "Done"];
 export const COLORS = ["#E63946", "#7c3aed", "#0891b2", "#059669", "#f59e0b", "#ec4899"];
 
 export function slugify(name) {
@@ -25,6 +25,8 @@ export function parsePath(pathname) {
   if (parts[0] === 'user') {
     if (parts[1] === 'dashboard') return { page: 'user_dash', sub: parts[2] || 'bookings' };
   }
+  if (parts[0] === 'payment' && parts[1]) return { page: 'payment', sub: parts[1] };
+  return { page: 'home', sub: null };
   return { page: 'home', sub: null };
 }
 
@@ -37,6 +39,7 @@ export function buildPath(page, sub) {
     staff_auth: '/staff',
     staff_dash: sub ? `/staff/dashboard/${sub}` : '/staff/dashboard',
     user_dash: sub ? `/user/dashboard/${sub}` : '/user/dashboard',
+    payment: sub ? `/payment/${sub}` : '/',
   };
   return map[page] || '/';
 }

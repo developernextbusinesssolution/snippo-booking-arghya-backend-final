@@ -5,7 +5,8 @@ import {
   loginAdmin, 
   registerStaff, 
   loginStaff,
-  getMe
+  getMe,
+  checkEmail
 } from "../controllers/authController.js";
 import { authLimiter } from "../middlewares/rateLimiters.js";
 import { requireAuth } from "../middlewares/authMiddleware.js";
@@ -17,10 +18,12 @@ router.get("/me", requireAuth(), getMe);
 
 router.use(authLimiter);
 
+router.post("/register", registerUser);
 router.post("/register-user", upload.single("idDocument"), registerUser);
 router.post("/login-user", loginUser);
 router.post("/login-admin", loginAdmin);
 router.post("/register-staff", upload.single("idDocument"), registerStaff);
 router.post("/login-staff", loginStaff);
+router.post("/check-email", checkEmail);
 
 export default router;

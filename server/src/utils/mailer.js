@@ -1,103 +1,81 @@
-import { Resend } from 'resend';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const EMAILJS_API_URL = 'https://api.emailjs.com/api/v1.0/email/send';
 
 /**
- * Standard HTML wrapper for premium look
+ * Sends an email using EmailJS REST API
+ * @param {string} templateId - EmailJS Template ID
+ * @param {Object} templateParams - Dynamic variables for the template
+ * @param {string} [toEmail] - Optional specific recipient (if not fixed in template)
  */
-const emailWrapper = (content) => `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: 'Inter', -apple-system, sans-serif; background-color: #f8f9fa; margin: 0; padding: 0; }
-    .container { max-width: 600px; margin: 20px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-    .header { background: #080810; padding: 20px; text-align: center; }
-    .content { padding: 40px; line-height: 1.6; color: #1a1a1a; font-size: 16px; }
-    .footer { background: #f1f3f5; padding: 20px; text-align: center; color: #6c757d; font-size: 12px; }
-    .btn { display: inline-block; padding: 12px 24px; background: #E63946; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 20px; }
-    h1, h2, h3 { color: #080810; margin-top: 0; }
-    hr { border: 0; border-top: 1px solid #eee; margin: 30px 0; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <img src="https://snippo.com/wp-content/uploads/2026/02/tmpd7p765pj-1.webp" alt="Snippo" height="50">
-    </div>
-    <div class="content">
-      ${content}
-    </div>
-    <div class="footer">
-      &copy; ${new Date().getFullYear()} Snippo Booking. All rights reserved.<br>
-      This is an automated notification.
-    </div>
-  </div>
-</body>
-</html>
-`;
+export const sendEmailJS = async (templateId, templateParams, toEmail) => {
+  const serviceId = process.env.EMAILJS_SERVICE_ID;
+  const publicKey = process.env.EMAILJS_PUBLIC_KEY;
 
-/**
- * Replaces {{variable}} in string with provided values
- */
-const compile = (str, vars = {}) => {
-  let result = str;
-  for (const [key, val] of Object.entries(vars)) {
-    result = result.replace(new RegExp(`{{${key}}}`, 'g'), val || '');
-  }
-  return result;
-};
-
-export const sendEmail = async ({ to, subject, text, html, wrap = true }) => {
-  if (!process.env.RESEND_API_KEY) {
-    console.error('[Email Error] RESEND_API_KEY not configured');
+  if (!serviceId || !publicKey) {
+    console.error('[EmailJS Error] Missing Service ID or Public Key in environment');
     return null;
   }
 
+  // Ensure to_email is passed if provided, otherwise trust template defaults
+  const params = {
+    ...templateParams,
+    to_email: toEmail || templateParams.email || templateParams.to_email,
+  };
+
   try {
-    const fromAddress = process.env.SMTP_FROM_EMAIL || 'onboarding@resend.dev';
-    const fromName = process.env.SMTP_FROM_NAME || 'Snippo Booking';
-
-    const finalHtml = wrap ? emailWrapper(html) : html;
-
-    const { data, error } = await resend.emails.send({
-      from: `${fromName} <${fromAddress}>`,
-      to: [to],
-      subject: subject,
-      html: finalHtml,
-      text: text || "This email requires HTML viewing",
+    const response = await fetch(EMAILJS_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        service_id: serviceId,
+        template_id: templateId,
+        user_id: publicKey,
+        template_params: params,
+      }),
     });
 
-    if (error) {
-      console.error('[Resend Error]', error);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[EmailJS Error] API response not OK:', response.status, errorText);
       return null;
     }
 
-    return data;
+    const result = await response.text();
+    console.log('[EmailJS Success]', result);
+    return result;
   } catch (error) {
-    console.error('[Email Error] failure:', error.message);
+    console.error('[EmailJS Error] failure:', error.message);
     return null;
   }
 };
 
 /**
- * Fetches dynamic template and sends email
+ * Legacy support for direct email sending (mapped to EmailJS)
+ * Note: EmailJS works best with pre-defined templates.
  */
-import { getEmailTemplate } from '../store.js';
+export const sendEmail = async ({ to, subject, html }) => {
+  console.warn('[EmailJS] sendEmail called. Using generic template if available.');
+  return sendEmailJS(process.env.EMAILJS_TEMPLATE_ID_CUSTOMER, {
+    to_email: to,
+    subject: subject,
+    message_html: html
+  });
+};
 
+/**
+ * Legacy support for templated emails
+ */
 export const sendTemplatedEmail = async (templateId, to, vars = {}) => {
-  const template = await getEmailTemplate(templateId);
-  if (!template) {
-    console.warn(`[Email] Template ${templateId} not found, skipping.`);
-    return null;
-  }
+  // Map our internal template IDs to EmailJS Template IDs if needed
+  // For now, we'll try to use the one provided by the user
+  const emailjsId = templateId === 'user_booking_confirmation'
+    ? process.env.EMAILJS_TEMPLATE_ID_CUSTOMER
+    : templateId;
 
-  const subject = compile(template.subject, vars);
-  const html = compile(template.body, vars);
-
-  return sendEmail({ to, subject, html });
+  return sendEmailJS(emailjsId, vars, to);
 };

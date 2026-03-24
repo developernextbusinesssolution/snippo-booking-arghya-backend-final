@@ -4,8 +4,6 @@ import { normalizeEmail, initials, pickColor } from "../utils.js";
 import { httpError, asyncHandler } from "../utils/errorHelpers.js";
 import { resolveStaffForUser, resolvePendingForUser } from "../utils/userHelpers.js";
 import { sendEmail, sendTemplatedEmail } from "../utils/mailer.js";
-import fs from "node:fs/promises";
-import path from "node:path";
 
 export const registerUser = asyncHandler(async (req, res) => {
   const name = String(req.body?.name || "").trim();
@@ -18,16 +16,9 @@ export const registerUser = asyncHandler(async (req, res) => {
   if (password.length < 6) throw httpError(400, "Password must be at least 6 characters");
 
   let createdUser;
-  let idDocBase64 = null;
-
+  let idDocument = String(req.body?.idImage || "").trim() || null;
   if (req.file) {
-    try {
-      const buffer = await fs.readFile(req.file.path);
-      idDocBase64 = `data:${req.file.mimetype};base64,${buffer.toString("base64")}`;
-      await fs.unlink(req.file.path); // Delete local temp file
-    } catch (err) {
-      console.error("[upload] Base64 conversion failed:", err);
-    }
+    idDocument = req.file.path; // Cloudinary URL
   }
 
   await updateData(async (data) => {
@@ -44,7 +35,7 @@ export const registerUser = asyncHandler(async (req, res) => {
       passwordHash: await hashPassword(password),
       role: "user",
       status: "active",
-      idDocument: idDocBase64,
+      idDocument,
     };
 
     data.users.push(user);
@@ -73,7 +64,7 @@ export const loginUser = asyncHandler(async (req, res) => {
   const password = String(req.body?.password || "");
 
   const user = await getUserByEmail(email);
-  if (!user || user.role !== "user") {
+  if (!user || !["user", "security"].includes(user.role)) {
     throw httpError(401, "Invalid credentials");
   }
 
@@ -83,19 +74,45 @@ export const loginUser = asyncHandler(async (req, res) => {
   res.json({ token: makeToken(user), user: sanitizeUser(user) });
 });
 
+export const checkEmail = asyncHandler(async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  if (!email || !email.includes("@")) throw httpError(400, "Valid email required");
+
+  const user = await getUserByEmail(email);
+  res.json({ exists: !!user });
+});
+
 export const loginAdmin = asyncHandler(async (req, res) => {
   const email = normalizeEmail(req.body?.email);
   const password = String(req.body?.password || "");
 
+  if (!email || !password) {
+    throw httpError(400, "Email and password are required");
+  }
+
+  console.log(`[auth] Admin login attempt for email: "${email}" (Password length: ${password.length})`);
+
   const user = await getUserByEmail(email);
-  if (!user || user.role !== "admin") {
-    throw httpError(401, "Invalid credentials");
+  if (!user) {
+    console.log(`[auth] No user found in database with email: "${email}"`);
+    throw httpError(401, "Invalid credentials - User not found");
+  }
+
+  if (user.role !== "admin") {
+    console.log(`[auth] User "${email}" exists but has role: "${user.role}" (expected: "admin")`);
+    throw httpError(403, "Forbidden - Not an admin account");
   }
 
   const valid = await checkPassword(password, user.passwordHash);
-  if (!valid) throw httpError(401, "Invalid credentials");
+  if (!valid) {
+    console.log(`[auth] Password mismatch for admin: "${email}"`);
+    throw httpError(401, "Invalid credentials - Password incorrect");
+  }
 
-  res.json({ token: makeToken(user), user: sanitizeUser(user) });
+  console.log(`[auth] Admin login successful: "${email}"`);
+
+  const token = makeToken(user);
+  res.json({ token, user: sanitizeUser(user) });
 });
 
 export const registerStaff = asyncHandler(async (req, res) => {
@@ -112,16 +129,9 @@ export const registerStaff = asyncHandler(async (req, res) => {
 
   let createdUser;
   let pendingEntry;
-  let idDocBase64 = null;
-
+  let idDocument = null;
   if (req.file) {
-    try {
-      const buffer = await fs.readFile(req.file.path);
-      idDocBase64 = `data:${req.file.mimetype};base64,${buffer.toString("base64")}`;
-      await fs.unlink(req.file.path); // Delete local temp file
-    } catch (err) {
-      console.error("[upload] Base64 conversion failed:", err);
-    }
+    idDocument = req.file.path; // Cloudinary URL
   }
 
   await updateData(async (data) => {
@@ -144,7 +154,7 @@ export const registerStaff = asyncHandler(async (req, res) => {
       i: initials(name),
       c: pickColor(),
       status: "pending",
-      idDocument: idDocBase64,
+      idDocument,
     };
 
     createdUser = {
@@ -157,7 +167,7 @@ export const registerStaff = asyncHandler(async (req, res) => {
       roleTitle: designation,
       phone,
       pendingId,
-      idDocument: idDocBase64,
+      idDocument,
     };
 
     data.pendingStaff.push(pendingEntry);
@@ -178,7 +188,7 @@ export const registerStaff = asyncHandler(async (req, res) => {
   }).catch(err => console.error("Staff application email failed", err));
 
   // To Admin
-  sendTemplatedEmail("admin_staff_application_alert", process.env.SMTP_FROM_EMAIL, {
+  sendTemplatedEmail("admin_staff_application_", process.env.SMTP_FROM_EMAIL, {
     name: createdUser.name,
     role: createdUser.roleTitle,
     email: createdUser.email,

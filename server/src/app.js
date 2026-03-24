@@ -55,6 +55,8 @@ app.use(morgan("dev"));
 app.use(globalLimiter);
 
 // ── API Routes ────────────────────────────────────────────────────────────────
+import securityRoutes from "./routes/securityRoutes.js";
+
 app.use("/api", publicRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
@@ -63,6 +65,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/staff", staffRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/reviews", reviewRoutes);
+app.use("/api/security", securityRoutes);
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // ── Serve Vite-built frontend (production only) ───────────────────────────────
