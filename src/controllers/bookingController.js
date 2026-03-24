@@ -312,58 +312,51 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
     const data = await readData();
     const customer = data.users.find(u => u.id === updated.userId);
     const targetEmail = customer?.email || req.authUser.email;
+    const staffMember = data.staff.find(s => s.id === updated.staffId);
 
-    const emailVars = {
-      name: updated.name || updated.u,
-      bookingId: updated.id,
-      service: updated.svc,
-      staff: updated.stf,
-      date: updated.dt,
-      time: updated.t,
-      price: updated.p,
-      status: status
+    // Parse price for breakdown (e.g. "$120.00" -> 120)
+    const rawPrice = parseFloat((updated.p || "0").replace(/[^0-9.]/g, "")) || 0;
+    const subtotal = rawPrice.toFixed(2);
+    const tax = (0).toFixed(2); // No tax — update if needed
+    const totalAmount = rawPrice.toFixed(2);
+
+    // Shared vars matching the HTML template placeholders
+    const sharedVars = {
+      invoice_id: updated.id,
+      customer_name: updated.name || updated.u || "Customer",
+      email: targetEmail,
+      booking_date: updated.dt,
+      service_name: updated.svc,
+      service_price: subtotal,
+      subtotal: subtotal,
+      tax: tax,
+      total_amount: totalAmount,
+      payment_status: status === "upcoming" ? "Paid" : status === "completed" ? "Completed" : "Cancelled",
+      staff_name: staffMember?.name || updated.stf || "",
+      time_slot: updated.t,
+      customer_phone: updated.phone || "",
     };
 
-    if (status === "upcoming") {
-      sendEmailJS(process.env.EMAILJS_TEMPLATE_ID_CUSTOMER, {
-        ...emailVars,
-        customer_name: emailVars.name,
-        invoice_id: updated.id,
-        booking_date: updated.dt,
-        service_name: updated.svc,
-        total_amount: updated.p,
-        payment_status: "Paid"
-      }, targetEmail).catch(err => console.error("Confirmation email failed", err));
+    // 1. Email to Customer
+    console.log(`[Email] Sending confirmation to customer: ${targetEmail}`);
+    sendEmailJS(
+      process.env.EMAILJS_TEMPLATE_ID_CUSTOMER,
+      { ...sharedVars, to_email: targetEmail },
+      targetEmail
+    ).then(() => console.log(`[Email] ✅ Customer email sent to: ${targetEmail}`))
+     .catch(err => console.error(`[Email] ❌ Customer email failed (${targetEmail}):`, err.message));
 
-      const staffMember = data.staff.find(s => s.id === updated.staffId);
-      if (staffMember && staffMember.email) {
-        sendEmailJS(process.env.EMAILJS_TEMPLATE_ID_STAFF, {
-          ...emailVars,
-          staff_name: staffMember.name,
-          customer_name: emailVars.name,
-          customer_phone: updated.phone,
-          time_slot: updated.t
-        }, staffMember.email).catch(err => console.error("Staff notification email failed", err));
-      }
-    } 
-    else if (status === "completed") {
-      sendTemplatedEmail("booking_completed", targetEmail, emailVars)
-        .catch(err => console.error("Completion email to user failed", err));
-
-      const staffMember = data.staff.find(s => s.id === updated.staffId);
-      if (staffMember && staffMember.email) {
-        sendTemplatedEmail("booking_completed", staffMember.email, emailVars)
-          .catch(err => console.error("Completion email to staff failed", err));
-      }
-    } else if (status === "cancelled") {
-      sendTemplatedEmail("booking_cancelled", targetEmail, emailVars)
-        .catch(err => console.error("Cancellation email to user failed", err));
-
-      const staffMember = data.staff.find(s => s.id === updated.staffId);
-      if (staffMember && staffMember.email) {
-        sendTemplatedEmail("booking_cancelled", staffMember.email, emailVars)
-          .catch(err => console.error("Cancellation email to staff failed", err));
-      }
+    // 2. Email to Staff
+    if (staffMember?.email) {
+      console.log(`[Email] Sending notification to staff: ${staffMember.email}`);
+      sendEmailJS(
+        process.env.EMAILJS_TEMPLATE_ID_STAFF,
+        { ...sharedVars, to_email: staffMember.email },
+        staffMember.email
+      ).then(() => console.log(`[Email] ✅ Staff email sent to: ${staffMember.email}`))
+       .catch(err => console.error(`[Email] ❌ Staff email failed (${staffMember.email}):`, err.message));
+    } else {
+      console.warn(`[Email] ⚠️ Staff member has no email — skipping staff notification`);
     }
   }
 });
