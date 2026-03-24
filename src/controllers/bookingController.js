@@ -278,11 +278,10 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
 
   if (!allowed.includes(status)) throw httpError(400, "Invalid booking status");
 
-  let updated;
-  await updateData(async (data) => {
+  try {
+    const data = await readData();
     const booking = data.bookings.find((item) => item.id === id);
     if (!booking) throw httpError(404, "Booking not found");
-    console.log(`[BACKEND] Updating status for ${id} from ${booking.s} to ${status}`);
 
     if (req.authUser.role === "staff") {
       const staffRef = data.staff.find(s => s.id === req.authUser.staffId);
@@ -303,7 +302,7 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
     res.json(updated);
   } catch (err) {
     console.error(`[BACKEND] Failed to update booking status: ${err.message}`);
-    throw httpError(status >= 500 ? 500 : 400, err.message);
+    throw httpError(err.status || 400, err.message);
   }
 });
 
