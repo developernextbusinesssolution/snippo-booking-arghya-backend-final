@@ -45,18 +45,23 @@ console.log("[CORS] Allowed Origins:", allowedOrigins);
 app.use(
   cors({
     origin(origin, cb) {
+      // 1. Allow non-browser requests (like server-to-server or tools)
       if (!origin) return cb(null, true);
       
+      // 2. Check if the incoming origin is in our whitelist or if wildcard is enabled
       const isAllowed = allowedOrigins.includes(origin) || allowedOrigins.includes("*");
       
       if (isAllowed) {
         cb(null, true);
       } else {
-        console.warn(`[CORS] Rejected Origin: ${origin} (Not in: ${allowedOrigins.join(", ")})`);
-        cb(new Error(`Origin ${origin} not allowed by CORS policy`));
+        // Log the failure for debugging so the user can see what's actually hitting the server
+        console.warn(`[CORS Blocked] Origin: "${origin}" | Allowed: [${allowedOrigins.join(", ")}]`);
+        cb(null, false); // Return false instead of an Error to allow proper CORS failure response
       }
     },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "stripe-signature"],
   })
 );
 
