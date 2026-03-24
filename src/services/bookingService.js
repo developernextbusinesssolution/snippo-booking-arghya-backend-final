@@ -46,7 +46,8 @@ export const handleBookingStatusChange = async (bookingId, status, fallbackEmail
     const totalAmount = rawPrice.toFixed(2);
 
     const sharedVars = {
-      invoice_id: updated.id,
+      booking_id: updated.id, // For staff template
+      invoice_id: updated.id, // For customer template
       customer_name: updated.name || updated.u || "Customer",
       customer_email: targetEmail,
       customer_phone: updated.phone || updated.det?.phone || "",
@@ -68,7 +69,7 @@ export const handleBookingStatusChange = async (bookingId, status, fallbackEmail
       console.log(`[Email] Sending confirmation to customer: ${targetEmail}`);
       sendEmailJS(
         process.env.EMAILJS_TEMPLATE_ID_CUSTOMER,
-        { ...sharedVars, to_email: targetEmail },
+        { ...sharedVars, email: targetEmail },
         targetEmail
       ).then((res) => {
         if (res) console.log(`[Email] ✅ Customer email sent to: ${targetEmail}`);
@@ -80,7 +81,7 @@ export const handleBookingStatusChange = async (bookingId, status, fallbackEmail
       console.log(`[Email] Sending notification to staff: ${staffMember.email}`);
       sendEmailJS(
         process.env.EMAILJS_TEMPLATE_ID_STAFF,
-        { ...sharedVars, to_email: staffMember.email },
+        { ...sharedVars, email: staffMember.email },
         staffMember.email
       ).then((res) => {
         if (res) console.log(`[Email] ✅ Staff email sent to: ${staffMember.email}`);
