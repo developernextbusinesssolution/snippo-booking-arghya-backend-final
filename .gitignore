@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Build output — Render builds fresh on deploy
+client/dist/
+
+# Environment files
+
+.env.local
+.env.production
+.env
+# System files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

@@ -37,7 +37,7 @@ app.use(
 // ── CORS ──────────────────────────────────────────────────────────────────────
 const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:5173")
   .split(",")
-  .map((v) => v.trim())
+  .map((v) => v.trim().replace(/\/$/, ""))
   .filter(Boolean);
 
 app.use(
