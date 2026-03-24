@@ -2,11 +2,15 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import User from "../src/models/User.js";
 import { hashPassword } from "../src/auth.js";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 async function createAdmin() {
   const uri = process.env.MONGODB_URI;
+  console.log(uri);
   if (!uri) {
     console.error("Error: MONGODB_URI not found in .env");
     process.exit(1);
