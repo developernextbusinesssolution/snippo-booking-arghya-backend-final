@@ -48,7 +48,9 @@ export const handleBookingStatusChange = async (bookingId, status, fallbackEmail
     const sharedVars = {
       invoice_id: updated.id,
       customer_name: updated.name || updated.u || "Customer",
-      email: targetEmail,
+      customer_email: targetEmail,
+      customer_phone: updated.phone || updated.det?.phone || "",
+      customer_notes: updated.notes || "",
       booking_date: updated.dt,
       service_name: updated.svc,
       service_price: subtotal,
@@ -58,7 +60,7 @@ export const handleBookingStatusChange = async (bookingId, status, fallbackEmail
       payment_status: status === "upcoming" ? "Paid" : status === "completed" ? "Completed" : "Cancelled",
       staff_name: staffMember?.name || updated.stf || "",
       time_slot: updated.t,
-      customer_phone: updated.phone || "",
+      status_label: status.toUpperCase(),
     };
 
     // 1. Email to Customer
@@ -68,8 +70,9 @@ export const handleBookingStatusChange = async (bookingId, status, fallbackEmail
         process.env.EMAILJS_TEMPLATE_ID_CUSTOMER,
         { ...sharedVars, to_email: targetEmail },
         targetEmail
-      ).then(() => console.log(`[Email] ✅ Customer email sent to: ${targetEmail}`))
-       .catch(err => console.error(`[Email] ❌ Customer email failed (${targetEmail}):`, err.message));
+      ).then((res) => {
+        if (res) console.log(`[Email] ✅ Customer email sent to: ${targetEmail}`);
+      }).catch(err => console.error(`[Email] ❌ Customer email failed (${targetEmail}):`, err.message));
     }
 
     // 2. Email to Staff
@@ -79,8 +82,9 @@ export const handleBookingStatusChange = async (bookingId, status, fallbackEmail
         process.env.EMAILJS_TEMPLATE_ID_STAFF,
         { ...sharedVars, to_email: staffMember.email },
         staffMember.email
-      ).then(() => console.log(`[Email] ✅ Staff email sent to: ${staffMember.email}`))
-       .catch(err => console.error(`[Email] ❌ Staff email failed (${staffMember.email}):`, err.message));
+      ).then((res) => {
+        if (res) console.log(`[Email] ✅ Staff email sent to: ${staffMember.email}`);
+      }).catch(err => console.error(`[Email] ❌ Staff email failed (${staffMember.email}):`, err.message));
     } else {
       console.warn(`[Email] ⚠️ Staff member (${updated.stf}) has no email — skipping notification`);
     }
