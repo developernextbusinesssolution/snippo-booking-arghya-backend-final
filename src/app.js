@@ -50,6 +50,7 @@ app.use(
   })
 );
 
+app.use("/api/payments", paymentRoutes);
 app.use(express.json({ limit: "1mb" }));
 app.use(morgan("dev"));
 app.use(globalLimiter);
@@ -63,7 +64,6 @@ app.use("/api/users", userRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/staff", staffRoutes);
-app.use("/api/payments", paymentRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/security", securityRoutes);
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));

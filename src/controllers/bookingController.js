@@ -7,6 +7,7 @@ import User from "../models/User.js";
 import Booking from "../models/Booking.js";
 import { makeToken, sanitizeUser, hashPassword } from "../auth.js";
 import Stripe from "stripe";
+import { handleBookingStatusChange } from "../services/bookingService.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY?.trim());
 
@@ -298,66 +299,11 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
     }
 
     console.log(`[BACKEND] Updating status to ${status} for booking ${id}`);
-    booking.s = status;
-    if (status === "upcoming") {
-      booking.paid = true;
-    }
-    updated = { ...booking };
-    return updated;
-  });
-
-  res.json(updated);
-
-  if (status === "upcoming" || status === "completed" || status === "cancelled") {
-    const data = await readData();
-    const customer = data.users.find(u => u.id === updated.userId);
-    const targetEmail = customer?.email || req.authUser.email;
-    const staffMember = data.staff.find(s => s.id === updated.staffId);
-
-    // Parse price for breakdown (e.g. "$120.00" -> 120)
-    const rawPrice = parseFloat((updated.p || "0").replace(/[^0-9.]/g, "")) || 0;
-    const subtotal = rawPrice.toFixed(2);
-    const tax = (0).toFixed(2); // No tax — update if needed
-    const totalAmount = rawPrice.toFixed(2);
-
-    // Shared vars matching the HTML template placeholders
-    const sharedVars = {
-      invoice_id: updated.id,
-      customer_name: updated.name || updated.u || "Customer",
-      email: targetEmail,
-      booking_date: updated.dt,
-      service_name: updated.svc,
-      service_price: subtotal,
-      subtotal: subtotal,
-      tax: tax,
-      total_amount: totalAmount,
-      payment_status: status === "upcoming" ? "Paid" : status === "completed" ? "Completed" : "Cancelled",
-      staff_name: staffMember?.name || updated.stf || "",
-      time_slot: updated.t,
-      customer_phone: updated.phone || "",
-    };
-
-    // 1. Email to Customer
-    console.log(`[Email] Sending confirmation to customer: ${targetEmail}`);
-    sendEmailJS(
-      process.env.EMAILJS_TEMPLATE_ID_CUSTOMER,
-      { ...sharedVars, to_email: targetEmail },
-      targetEmail
-    ).then(() => console.log(`[Email] ✅ Customer email sent to: ${targetEmail}`))
-     .catch(err => console.error(`[Email] ❌ Customer email failed (${targetEmail}):`, err.message));
-
-    // 2. Email to Staff
-    if (staffMember?.email) {
-      console.log(`[Email] Sending notification to staff: ${staffMember.email}`);
-      sendEmailJS(
-        process.env.EMAILJS_TEMPLATE_ID_STAFF,
-        { ...sharedVars, to_email: staffMember.email },
-        staffMember.email
-      ).then(() => console.log(`[Email] ✅ Staff email sent to: ${staffMember.email}`))
-       .catch(err => console.error(`[Email] ❌ Staff email failed (${staffMember.email}):`, err.message));
-    } else {
-      console.warn(`[Email] ⚠️ Staff member has no email — skipping staff notification`);
-    }
+    const updated = await handleBookingStatusChange(id, status, req.authUser.email);
+    res.json(updated);
+  } catch (err) {
+    console.error(`[BACKEND] Failed to update booking status: ${err.message}`);
+    throw httpError(status >= 500 ? 500 : 400, err.message);
   }
 });
 
