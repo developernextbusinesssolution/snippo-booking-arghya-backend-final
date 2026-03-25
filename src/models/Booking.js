@@ -24,6 +24,7 @@ const BookingSchema = new mongoose.Schema({
   verifiedBySecurity: { type: Boolean, default: false },
   securityVerifiedAt: { type: Date, default: null },
   securityId: { type: String, default: null },
+  verifiedByName: { type: String, default: "" },
 }, { timestamps: true });
 
 export default mongoose.model("Booking", BookingSchema);

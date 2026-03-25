@@ -1,22 +1,54 @@
+import mongoose from "mongoose";
 import { asyncHandler, httpError } from "../utils/errorHelpers.js";
 import { readData, updateData } from "../store.js";
 import User from "../models/User.js";
+import Booking from "../models/Booking.js";
 import { hashPassword } from "../auth.js";
 import { normalizeEmail } from "../utils.js";
 
-// Fetch bookings for today
+// Fetch bookings filtered by security availability
 export const getSecurityShifts = asyncHandler(async (req, res) => {
   const data = await readData();
-  const todayKey = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+  const securityUser = req.authUser;
   
-  // Show all upcoming and active bookings across all dates
-  // Also include completed bookings for today
-  const filtered = data.bookings.filter(b => 
-    ["upcoming", "active"].includes(b.s) || 
-    (b.s === "completed" && b.dt.includes(todayKey))
-  );
+  if (!securityUser || securityUser.role !== "security") {
+    throw httpError(403, "Access denied");
+  }
+
+  const availability = securityUser.availability || [];
   
-  // Robust sorting by date and time
+  // Filtering logic: only show bookings that fall within security's working hours
+  const filtered = data.bookings.filter(b => {
+    // 1. Get day of week for booking date
+    const bookingDate = new Date(b.dt);
+    const dayName = bookingDate.toLocaleDateString("en-US", { weekday: "long" });
+    
+    // 2. Find matching availability slot
+    const slot = availability.find(a => a.day === dayName);
+    if (!slot || !slot.enabled) return false;
+
+    // 3. Check if booking time falls within slot [startTime, endTime]
+    // Slot times are HH:mm (24h). Booking times are usually "9:00 AM" or similar.
+    // We need to normalize for comparison.
+    try {
+      const bTime = new Date(`2000-01-01 ${b.t}`);
+      const bHour = bTime.getHours();
+      const bMin = bTime.getMinutes();
+      const bTotalMin = bHour * 60 + bMin;
+
+      const [sH, sM] = slot.startTime.split(":").map(Number);
+      const [eH, eM] = slot.endTime.split(":").map(Number);
+      const startMinTotal = sH * 60 + sM;
+      const endMinTotal = eH * 60 + eM;
+
+      return bTotalMin >= startMinTotal && bTotalMin <= endMinTotal;
+    } catch (e) {
+      console.error("Error parsing time for filtering:", b.t, e);
+      return true; // Fallback to show if parse fails
+    }
+  });
+  
+  // Sort by date and time
   filtered.sort((a, b) => {
     const da = new Date(a.dt + " " + a.t);
     const db = new Date(b.dt + " " + b.t);
@@ -29,29 +61,26 @@ export const getSecurityShifts = asyncHandler(async (req, res) => {
 // Verify a booking
 export const verifyBooking = asyncHandler(async (req, res) => {
   const id = req.params.id;
-  const securityUserId = req.authUser.id;
+  const securityUser = req.authUser;
 
-  let updatedBooking = null;
-  await updateData(async (data) => {
-    const booking = data.bookings.find(b => b.id === id);
-    if (!booking) throw httpError(404, "Booking not found");
+  console.log(`[BACKEND] Security verification request for booking ${id} by ${securityUser.name}`);
 
-    if (booking.verifiedBySecurity) {
-      throw httpError(400, "Booking is already verified");
-    }
+  const update = {
+    verifiedBySecurity: true,
+    securityVerifiedAt: new Date(),
+    securityId: securityUser.id,
+    verifiedByName: securityUser.name
+  };
 
-    booking.verifiedBySecurity = true;
-    booking.securityVerifiedAt = new Date().toISOString();
-    booking.securityId = securityUserId;
-    
-    // Optionally change state if they verify it -> make it 'active' or something else?
-    // User asked "just verify that the staff came and the usr came ... and then clcik verifed"
-    // Keeping state intact, just setting verified flag.
+  const updatedBooking = await Booking.findOneAndUpdate(
+    { id: id },
+    { $set: update },
+    { new: true }
+  ).lean();
 
-    updatedBooking = booking;
-    return updatedBooking;
-  });
+  if (!updatedBooking) throw httpError(404, "Booking not found");
 
+  console.log(`[BACKEND] Booking ${id} verified by ${securityUser.name}`);
   res.json({ success: true, booking: updatedBooking });
 });
 
@@ -64,16 +93,17 @@ export const updateAvailability = asyncHandler(async (req, res) => {
     throw httpError(400, "Availability must be an array");
   }
 
-  let updatedUser = null;
-  await updateData(async (data) => {
-    const user = data.users.find(u => u.id === userId);
-    if (!user) throw httpError(404, "User not found");
+  console.log(`[BACKEND] Updating availability for security user: ${req.authUser.name}`);
 
-    user.availability = availability;
-    updatedUser = user;
-    return updatedUser;
-  });
+  const updatedUser = await User.findOneAndUpdate(
+    { id: userId },
+    { $set: { availability } },
+    { new: true }
+  ).lean();
 
+  if (!updatedUser) throw httpError(404, "User not found");
+
+  console.log(`[BACKEND] Security availability updated for: ${updatedUser.name}`);
   res.json({ success: true, availability: updatedUser.availability });
 });
 
