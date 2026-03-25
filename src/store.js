@@ -101,6 +101,11 @@ export async function readData() {
     Booking.find().sort({ createdAt: -1 }).limit(100).lean()
   ]);
 
+  if (staff.length > 0) {
+    const s = staff[0];
+    console.log(`[DB_CHECK] Specialist ${s.name} | Availability: ${s.availability?.length || 0} slots.`);
+  }
+
   return { users, services, staff, pendingStaff, bookings };
 }
 
@@ -117,27 +122,27 @@ export async function updateData(mutator) {
 
   // 1. Sync Users
   for (const u of data.users) {
-    savePromises.push(User.findOneAndUpdate({ id: u.id }, u, { upsert: true }));
+    savePromises.push(User.findOneAndUpdate({ id: u.id }, { $set: u }, { upsert: true }));
   }
 
   // 2. Sync Services
   for (const s of data.services) {
-    savePromises.push(Service.findOneAndUpdate({ id: s.id }, s, { upsert: true }));
+    savePromises.push(Service.findOneAndUpdate({ id: s.id }, { $set: s }, { upsert: true }));
   }
 
   // 3. Sync Staff
   for (const s of data.staff) {
-    savePromises.push(Staff.findOneAndUpdate({ id: s.id }, s, { upsert: true }));
+    savePromises.push(Staff.findOneAndUpdate({ id: s.id }, { $set: s }, { upsert: true }));
   }
 
   // 4. Sync PendingStaff
   for (const p of data.pendingStaff) {
-    savePromises.push(PendingStaff.findOneAndUpdate({ id: p.id }, p, { upsert: true }));
+    savePromises.push(PendingStaff.findOneAndUpdate({ id: p.id }, { $set: p }, { upsert: true }));
   }
 
   // 5. Sync Bookings (Only those in the array)
   for (const b of data.bookings) {
-    savePromises.push(Booking.findOneAndUpdate({ id: b.id }, b, { upsert: true }));
+    savePromises.push(Booking.findOneAndUpdate({ id: b.id }, { $set: b }, { upsert: true }));
   }
 
   await Promise.all(savePromises);
@@ -161,12 +166,34 @@ export async function queryPaged(collectionName, { page = 1, limit = 10, where =
   };
 }
 
-export async function getPagedBookings({ userId, staffName, page = 1, limit = 10 } = {}) {
+export async function getPagedBookings({ userId, staffName, staffId, page = 1, limit = 10, status = "all", sortBy = "createdAt", sortOrder = -1 } = {}) {
   const where = {};
   if (userId) where.userId = userId;
   if (staffName) where.stf = staffName;
+  if (staffId !== undefined && staffId !== null) where.staffId = Number(staffId);
+  if (status && status !== "all") where.s = status;
 
-  return queryPaged("Booking", { page, limit, where });
+  // Map user-friendly sort fields to DB fields if necessary
+  const sortMap = {
+    customer: "u",
+    service: "svc",
+    staff: "stf",
+    date: "dt",
+    amount: "p",
+    status: "s"
+  };
+  const sortField = sortMap[sortBy] || sortBy;
+
+  return queryPaged("Booking", { page, limit, where, sort: { [sortField]: sortOrder } });
+}
+
+export async function getBookingCounts() {
+  const all = await Booking.countDocuments();
+  const upcoming = await Booking.countDocuments({ s: "upcoming" });
+  const active = await Booking.countDocuments({ s: "active" });
+  const completed = await Booking.countDocuments({ s: "completed" });
+  const cancelled = await Booking.countDocuments({ s: "cancelled" });
+  return { all, upcoming, active, completed, cancelled };
 }
 
 export async function getPagedStaff({ page = 1, limit = 10 } = {}) {

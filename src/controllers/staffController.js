@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { readData, updateData } from "../store.js";
 import { normalizeEmail, initials } from "../utils.js";
 import { asyncHandler, httpError } from "../utils/errorHelpers.js";
@@ -21,7 +22,7 @@ export const getStaffBookings = asyncHandler(async (req, res) => {
     return;
   }
 
-  res.json(data.bookings.filter((booking) => booking.stf === staffRef.name));
+  res.json(data.bookings.filter((booking) => Number(booking.staffId) === Number(staffRef.id)));
 });
 
 
@@ -55,29 +56,57 @@ export const updateStaffServices = asyncHandler(async (req, res) => {
 });
 
 export const updateStaffAvailability = asyncHandler(async (req, res) => {
-  const avail = Array.isArray(req.body?.avail) ? req.body.avail.map(Boolean) : null;
-  if (!avail || avail.length !== 7) {
-    throw httpError(400, "Availability must be an array of 7 booleans");
+  const { avail, availability } = req.body || {};
+  console.log(`[BACKEND] Received availability update request for staff. availability: ${availability?.length}, avail: ${avail?.length}`);
+
+  const user = req.authUser;
+  if (!user || user.status !== "active") {
+    throw httpError(403, "Staff account is not active");
   }
 
-  let updated;
-  await updateData(async (data) => {
-    const user = data.users.find((item) => item.id === req.authUser.id);
-    if (!user || user.status !== "active") {
-      throw httpError(403, "Staff account is not active");
-    }
-
-    const staffRef = resolveStaffForUser(data, user);
-    if (!staffRef) {
-      throw httpError(404, "Staff profile not found");
-    }
-
-    staffRef.avail = avail;
-    updated = staffRef;
-    return updated;
+  // Find staff record
+  let staff = await mongoose.model("Staff").findOne({ 
+    $or: [{ id: user.staffId }, { email: user.email }] 
   });
 
-  res.json(updated);
+  if (!staff) {
+    throw httpError(404, "Staff profile not found");
+  }
+
+  const update = {};
+  if (Array.isArray(availability) && availability.length === 7) {
+    console.log(`[BACKEND] Updating staff ${staff.name} with new structure`);
+    update.availability = availability;
+    update.avail = availability.map(a => !!a.enabled);
+  } else if (Array.isArray(avail) && avail.length === 7) {
+    console.log(`[BACKEND] Updating staff ${staff.name} with legacy structure`);
+    update.avail = avail.map(Boolean);
+    const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    update.availability = avail.map((en, i) => ({
+      day: DAYS[i],
+      enabled: !!en,
+      startTime: staff.availability?.[i]?.startTime || "09:00",
+      endTime: staff.availability?.[i]?.endTime || "18:00"
+    }));
+  } else {
+    throw httpError(400, "Valid availability or avail array of 7 elements is required");
+  }
+
+  console.log(`[BACKEND] Executing update for staff ${staff.name} with:`, JSON.stringify(update));
+  
+  const updatedStaff = await mongoose.model("Staff").findOneAndUpdate(
+    { _id: staff._id },
+    { $set: update },
+    { new: true, runValidators: false }
+  ).lean();
+
+  if (!updatedStaff) {
+    console.error(`[BACKEND] FAILED to update staff ${staff.name}`);
+  } else {
+    console.log(`[BACKEND] SUCCESS: Saved staff ${updatedStaff.name}. availability slots in response: ${updatedStaff.availability?.length || 0}`);
+  }
+
+  res.json(updatedStaff);
 });
 
 export const updateStaffProfile = asyncHandler(async (req, res) => {

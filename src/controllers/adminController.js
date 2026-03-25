@@ -1,4 +1,5 @@
-import { readData, updateData, nextCounter, getPagedBookings, getPagedStaff, getPagedUsers, getStripeConfig, saveStripeConfig, getEmailTemplates, updateEmailTemplate } from "../store.js";
+import mongoose from "mongoose";
+import { readData, updateData, nextCounter, getPagedBookings, getPagedStaff, getPagedUsers, getStripeConfig, saveStripeConfig, getEmailTemplates, updateEmailTemplate, getBookingCounts } from "../store.js";
 import { normalizeEmail, initials, pickColor } from "../utils.js";
 import { asyncHandler, httpError } from "../utils/errorHelpers.js";
 import { userByEmail } from "../utils/userHelpers.js";
@@ -9,11 +10,15 @@ export const getAdminData = asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page || "1");
   const limit = parseInt(req.query.limit || "10");
 
-  const data = await readData(); // Keep small data like services/pending in memory for now
+  const sortBy = req.query.sortBy || "createdAt";
+  const sortOrder = parseInt(req.query.sortOrder || "-1");
+  const status = req.query.status || "all";
+
+  const data = await readData();
   
   let pagedData = {};
   if (tab === "bookings") {
-    pagedData = await getPagedBookings({ page, limit });
+    pagedData = await getPagedBookings({ page, limit, status, sortBy, sortOrder });
   } else if (tab === "staff") {
     pagedData = await getPagedStaff({ page, limit });
   } else if (tab === "security") {
@@ -25,12 +30,15 @@ export const getAdminData = asyncHandler(async (req, res) => {
     pagedData = { templates };
   }
 
+  const bookingCounts = await getBookingCounts();
+
   res.json({
     services: data.services,
     staff: data.staff,
-    bookingsByTab: pagedData, // Send paged data if requested by tab
-    bookings: data.bookings, // Keep for backward compatibility or simple overview
+    bookingsByTab: pagedData,
+    bookings: data.bookings,
     pendingStaff: data.pendingStaff,
+    bookingCounts,
     ...pagedData
   });
 });
@@ -108,6 +116,9 @@ export const deleteService = asyncHandler(async (req, res) => {
     return true;
   });
 
+  // Actual MongoDB Deletion
+  await mongoose.model("Service").deleteOne({ id });
+
   res.status(204).end();
 });
 
@@ -122,6 +133,10 @@ export const createStaff = asyncHandler(async (req, res) => {
   const avail = Array.isArray(req.body?.avail) && req.body.avail.length === 7
     ? req.body.avail.map(Boolean)
     : [true, true, true, true, true, false, false];
+  const DAYS_LIST = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const availability = Array.isArray(req.body?.availability) && req.body.availability.length === 7
+    ? req.body.availability
+    : avail.map((en, i) => ({ day: DAYS_LIST[i], enabled: en, startTime: "09:00", endTime: "18:00" }));
 
   if (!name) throw httpError(400, "Name is required");
   if (!role) throw httpError(400, "Role is required");
@@ -143,6 +158,7 @@ export const createStaff = asyncHandler(async (req, res) => {
       c: color,
       services,
       avail,
+      availability,
       active: true,
     };
     data.staff.push(createdStaff);
@@ -173,6 +189,10 @@ export const updateStaff = asyncHandler(async (req, res) => {
   const avail = Array.isArray(req.body?.avail) && req.body.avail.length === 7
     ? req.body.avail.map(Boolean)
     : [true, true, true, true, true, false, false];
+  const DAYS_LIST = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const availability = Array.isArray(req.body?.availability) && req.body.availability.length === 7
+    ? req.body.availability
+    : avail.map((en, i) => ({ day: DAYS_LIST[i], enabled: en, startTime: "09:00", endTime: "18:00" }));
   const active = Boolean(req.body?.active ?? true);
 
   if (!name) throw httpError(400, "Name is required");
@@ -193,7 +213,7 @@ export const updateStaff = asyncHandler(async (req, res) => {
       (item) => item.id !== req.authUser.id && normalizeEmail(item.email) === email
     );
     if (duplicateUser && duplicateUser.role !== "staff") {
-      throw httpError(409, "Email already belongs to another account");
+      throw httpError(404, "Email already belongs to another account");
     }
 
     const oldName = staffMember.name;
@@ -206,6 +226,7 @@ export const updateStaff = asyncHandler(async (req, res) => {
     staffMember.i = initials(name);
     staffMember.services = services;
     staffMember.avail = avail;
+    staffMember.availability = availability;
     staffMember.active = active;
     updatedStaff = staffMember;
 
@@ -243,14 +264,20 @@ export const deleteStaff = asyncHandler(async (req, res) => {
     if (!staffMember) throw httpError(404, "Staff member not found");
 
     data.staff = data.staff.filter((item) => item.id !== id);
-    data.users = data.users.map((user) => {
-      if (user.role === "staff" && user.staffId === id) {
-        return { ...user, status: "disabled", staffId: null };
-      }
-      return user;
-    });
+    const linkedUser = data.users.find(u => u.role === "staff" && u.staffId === id);
+    if (linkedUser) {
+      data.users = data.users.filter(u => u.id !== linkedUser.id);
+    }
     return true;
   });
+
+  // Actual MongoDB Deletion
+  const staff = await mongoose.model("Staff").findOne({ id });
+  if (staff) {
+    const email = staff.email;
+    await mongoose.model("User").deleteOne({ email, role: "staff" });
+    await mongoose.model("Staff").deleteOne({ id });
+  }
 
   res.status(204).end();
 });
@@ -284,6 +311,16 @@ export const deleteUser = asyncHandler(async (req, res) => {
     data.users.splice(userIndex, 1);
     return true;
   });
+
+  // Actual MongoDB Deletion
+  const user = await mongoose.model("User").findOne({ id });
+  if (user) {
+    if (user.role === "staff" && user.staffId) {
+      await mongoose.model("Staff").deleteOne({ id: user.staffId });
+    }
+    await mongoose.model("User").deleteOne({ id });
+    await mongoose.model("Booking").deleteMany({ userId: id });
+  }
 
   res.status(204).end();
 });
@@ -356,11 +393,21 @@ export const approvePendingStaff = asyncHandler(async (req, res) => {
       c: pending.c || pickColor(),
       services: pending.requestedServices || [],
       avail: [true, true, true, true, true, false, false],
+      availability: [
+        { day: "Monday", enabled: true, startTime: "09:00", endTime: "18:00" },
+        { day: "Tuesday", enabled: true, startTime: "09:00", endTime: "18:00" },
+        { day: "Wednesday", enabled: true, startTime: "09:00", endTime: "18:00" },
+        { day: "Thursday", enabled: true, startTime: "09:00", endTime: "18:00" },
+        { day: "Friday", enabled: true, startTime: "09:00", endTime: "18:00" },
+        { day: "Saturday", enabled: false, startTime: "09:00", endTime: "18:00" },
+        { day: "Sunday", enabled: false, startTime: "09:00", endTime: "18:00" }
+      ],
       active: true,
     };
 
     data.staff.push(approvedMember);
-    data.pendingStaff = data.pendingStaff.filter((item) => item.id !== id);
+    // Remove ALL pending requests for this email, not just the current ID
+    data.pendingStaff = data.pendingStaff.filter((item) => normalizeEmail(item.email) !== normalizeEmail(pending.email));
     pendingStaff = data.pendingStaff;
 
     const user = data.users.find(

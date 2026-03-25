@@ -40,7 +40,7 @@ export const getBookings = asyncHandler(async (req, res) => {
     return;
   }
 
-  const paged = await getPagedBookings({ staffName: staffRef.name, page, limit });
+  const paged = await getPagedBookings({ staffId: staffRef.id, page, limit });
   res.json(paged);
 });
 

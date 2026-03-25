@@ -8,7 +8,15 @@ const StaffSchema = new mongoose.Schema({
   i: { type: String, default: "" },
   c: { type: String, default: "#E63946" },
   services: [{ type: Number }],
-  avail: [{ type: Boolean }],
+  avail: [{ type: Boolean }], // Legacy: keeps compatibility with existing boolean-only logic if any
+  availability: [
+    {
+      day: { type: String }, // e.g. "Monday"
+      enabled: { type: Boolean, default: false },
+      startTime: { type: String, default: "09:00" },
+      endTime: { type: String, default: "18:00" }
+    }
+  ],
   active: { type: Boolean, default: true },
   profileImage: { type: String, default: "" },
   experience: { type: String, default: "" },

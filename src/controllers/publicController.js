@@ -34,7 +34,7 @@ export const getBootstrap = asyncHandler(async (req, res) => {
         (member.email.toLowerCase() === authUser.email.toLowerCase())
       );
       bookings = sRef
-        ? data.bookings.filter((booking) => booking.stf === sRef.name)
+        ? data.bookings.filter((booking) => Number(booking.staffId) === Number(sRef.id))
         : [];
     }
   }
