@@ -125,9 +125,10 @@ export const createBooking = asyncHandler(async (req, res) => {
 
     // Pricing
     const baseDurationHours = parseInt(service.dur || "60") / 60;
-    let finalPrice = staffMember.hourlyRate > 0
+    let basePrc = staffMember.hourlyRate > 0
       ? Math.round(baseDurationHours * staffMember.hourlyRate)
       : service.price;
+    let finalPrice = basePrc;
     
     const guests = Math.min(parseInt(peopleCount || "1") || 1, 10);
 
@@ -147,6 +148,7 @@ export const createBooking = asyncHandler(async (req, res) => {
       dt: dateLabel,
       t: timeLabel,
       p: toDollarAmount(finalPrice),
+      basePrice: toDollarAmount(basePrc),
       s: "pending_payment", // Initial status
       paid: false,
       serviceId: service.id,
@@ -235,6 +237,9 @@ export const extendBooking = asyncHandler(async (req, res) => {
     booking.additionalCost = newAdditionalCost;
     booking.originalDuration = booking.originalDuration || String(originalDur);
     booking.dur = String(originalDur + newAdditionalHours * 60);
+    
+    const currentPriceRaw = parseFloat((booking.p || "0").replace("$", ""));
+    booking.p = toDollarAmount(currentPriceRaw + (extraHours * 60));
 
     console.log(`[notification] Booking ${id} extended by ${extraHours}h. Staff: ${booking.stf}`);
     updated = { ...booking };
