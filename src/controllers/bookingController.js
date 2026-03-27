@@ -125,9 +125,7 @@ export const createBooking = asyncHandler(async (req, res) => {
 
     // Pricing
     const baseDurationHours = parseInt(service.dur || "60") / 60;
-    let basePrc = staffMember.hourlyRate > 0
-      ? Math.round(baseDurationHours * staffMember.hourlyRate)
-      : service.price;
+    let basePrc = service.price;
     let finalPrice = basePrc;
     
     const guests = Math.min(parseInt(peopleCount || "1") || 1, 10);
