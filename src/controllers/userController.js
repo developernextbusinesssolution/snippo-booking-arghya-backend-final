@@ -33,6 +33,11 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     user.name = name;
     user.email = email;
     user.phone = phone;
+    user.address = String(req.body?.address || "").trim();
+    user.city = String(req.body?.city || "").trim();
+    user.state = String(req.body?.state || "").trim();
+    user.zip = String(req.body?.zip || "").trim();
+    user.country = String(req.body?.country || "").trim();
 
     data.bookings.forEach((booking) => {
       if (booking.userId === user.id && booking.u === oldName) {

@@ -36,6 +36,11 @@ export const registerUser = asyncHandler(async (req, res) => {
       role: "user",
       status: "active",
       idDocument,
+      address: String(req.body?.address || "").trim(),
+      city: String(req.body?.city || "").trim(),
+      state: String(req.body?.state || "").trim(),
+      zip: String(req.body?.zip || "").trim(),
+      country: String(req.body?.country || "").trim(),
     };
 
     data.users.push(user);

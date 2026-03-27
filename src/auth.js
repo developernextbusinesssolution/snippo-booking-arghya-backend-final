@@ -28,6 +28,12 @@ export function sanitizeUser(user) {
     role: user.role,
     status: user.status || "active",
     roleTitle: user.roleTitle || "",
+    address: user.address || "",
+    city: user.city || "",
+    state: user.state || "",
+    zip: user.zip || "",
+    country: user.country || "",
+    idDocument: user.idDocument || null,
   };
 }
 

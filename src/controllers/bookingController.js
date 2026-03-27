@@ -45,7 +45,7 @@ export const getBookings = asyncHandler(async (req, res) => {
 });
 
 export const createBooking = asyncHandler(async (req, res) => {
-  const { serviceId, staffId, date, time, details, peopleCount } = req.body || {};
+  const { serviceId, staffId, date, time, details, peopleCount, additionalHours } = req.body || {};
 
   let createdBooking;
   let customerInfo;
@@ -129,10 +129,11 @@ export const createBooking = asyncHandler(async (req, res) => {
       ? Math.round(baseDurationHours * staffMember.hourlyRate)
       : service.price;
     
-    const guests = parseInt(peopleCount || "1") || 1;
-    if (guests > 1) {
-      finalPrice = Math.round(finalPrice * (1 + (guests - 1) * 0.2));
-    }
+    const guests = Math.min(parseInt(peopleCount || "1") || 1, 10);
+
+    const extraHrs = parseInt(additionalHours || "0") || 0;
+    const additionalCost = extraHrs * 60; // $60 per additional hour
+    finalPrice += additionalCost;
 
     createdBooking = {
       id: bookingId,
@@ -153,6 +154,8 @@ export const createBooking = asyncHandler(async (req, res) => {
       notes: String(details?.notes || "").trim(),
       createdAt: new Date().toISOString(),
       originalDuration: String(service.dur || "60"),
+      additionalHours: extraHrs,
+      additionalCost: additionalCost,
     };
 
     data.bookings.push(createdBooking);
