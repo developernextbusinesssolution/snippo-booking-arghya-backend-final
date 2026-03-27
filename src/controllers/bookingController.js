@@ -45,6 +45,8 @@ export const getBookings = asyncHandler(async (req, res) => {
 });
 
 export const createBooking = asyncHandler(async (req, res) => {
+  console.log("\n=== [CREATE BOOKING REQUEST] ===");
+  console.log("Payload received by backend:", JSON.stringify(req.body, null, 2));
   const { serviceId, staffId, date, time, details, peopleCount, additionalHours } = req.body || {};
 
   let createdBooking;

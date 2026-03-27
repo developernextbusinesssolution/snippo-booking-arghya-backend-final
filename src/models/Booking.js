@@ -12,6 +12,7 @@ const BookingSchema = new mongoose.Schema({
   dt: { type: String, required: true },
   t: { type: String, required: true },
   p: { type: String, required: true },
+  basePrice: { type: String, default: "" },
   s: { type: String, required: true, default: "upcoming" },
   paid: { type: Boolean, default: false },
   u: { type: String, required: true }, // Duplicate of name for legacy support
