@@ -233,8 +233,9 @@ export const loginStaff = asyncHandler(async (req, res) => {
 });
 
 export const getMe = asyncHandler(async (req, res) => {
-  const data = await readData();
-  const user = data.users.find((item) => item.id === req.authUser.id);
+  // Read from MongoDB directly to get the latest availability (not the stale store)
+  const User = (await import("../models/User.js")).default;
+  const user = await User.findOne({ id: req.authUser.id }).lean();
   if (!user) {
     throw httpError(401, "Session invalid");
   }
@@ -243,6 +244,7 @@ export const getMe = asyncHandler(async (req, res) => {
     throw httpError(403, "Staff account inactive");
   }
 
+  const data = await readData();
   const payload = { user: sanitizeUser(user) };
   if (user.role === "staff") {
     if (user.status === "pending") {

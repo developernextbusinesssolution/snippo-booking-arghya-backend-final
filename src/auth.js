@@ -34,6 +34,7 @@ export function sanitizeUser(user) {
     zip: user.zip || "",
     country: user.country || "",
     idDocument: user.idDocument || null,
+    availability: Array.isArray(user.availability) ? user.availability : [],
   };
 }
 
