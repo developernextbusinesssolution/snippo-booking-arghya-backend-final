@@ -1,5 +1,6 @@
 import { readData, updateData } from "../store.js";
 import { sendEmailJS } from "../utils/mailer.js";
+import { sendBookingToGHL } from "./ghlService.js";
 
 /**
  * Handles booking status changes and triggers associated workflows like emails.
@@ -89,6 +90,18 @@ export const handleBookingStatusChange = async (bookingId, status, fallbackEmail
     } else {
       console.warn(`[Email] ⚠️ Staff member (${updated.stf}) has no email — skipping notification`);
     }
+
+    // 3. Send data to GoHighLevel (GHL) CRM
+    const ghlEventMap = {
+      upcoming: "booking_confirmed",
+      completed: "booking_completed",
+      cancelled: "booking_cancelled",
+    };
+    sendBookingToGHL(updated, customer, staffMember, ghlEventMap[status])
+      .then((ok) => {
+        if (ok) console.log(`[GHL] ✅ Booking ${updated.id} sent to GHL as ${ghlEventMap[status]}`);
+      })
+      .catch((err) => console.error(`[GHL] ❌ GHL webhook failed for ${updated.id}:`, err.message));
   }
 
   return updated;

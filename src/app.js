@@ -81,6 +81,9 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/staff", staffRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/security", securityRoutes);
+
+// import ghlRoutes from "./routes/ghlRoutes.js";
+// app.use("/api/ghl", ghlRoutes);
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // ── Serve Vite-built frontend (production only) ───────────────────────────────
