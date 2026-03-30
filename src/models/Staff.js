@@ -14,7 +14,10 @@ const StaffSchema = new mongoose.Schema({
       day: { type: String }, // e.g. "Monday"
       enabled: { type: Boolean, default: false },
       startTime: { type: String, default: "09:00" },
-      endTime: { type: String, default: "18:00" }
+      endTime: { type: String, default: "18:00" },
+      enabled2: { type: Boolean, default: false },
+      startTime2: { type: String, default: "18:00" },
+      endTime2: { type: String, default: "23:59" }
     }
   ],
   active: { type: Boolean, default: true },
